@@ -1,5 +1,10 @@
 FROM python:3.13-slim
 
+# Add labels for GitHub Container Registry linking
+LABEL org.opencontainers.image.source=https://github.com/bifr0est/rezeptviewer
+LABEL org.opencontainers.image.description="Recipe Viewer Database Migration Tool"
+LABEL org.opencontainers.image.licenses=MIT
+
 WORKDIR /app
 
 # Install system dependencies

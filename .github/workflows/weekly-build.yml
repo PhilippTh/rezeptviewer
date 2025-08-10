@@ -16,10 +16,19 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Debug information
+      run: |
+        echo "Repository: ${{ github.repository }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "Registry: ${{ env.REGISTRY }}"
+        echo "Image base name: ${{ env.IMAGE_NAME }}"
 
     - name: Log in to Container Registry
       uses: docker/login-action@v3
