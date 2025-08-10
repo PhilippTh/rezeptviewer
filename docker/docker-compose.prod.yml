@@ -20,12 +20,17 @@ services:
     environment:
       - DATABASE_URL=postgresql://rezepte_user:${DB_PASSWORD:-rezepte_password}@postgres/rezepte_db
       # - SENTRY_DSN=${SENTRY_DSN}  # Uncomment for error tracking
-      # - LOG_LEVEL=INFO
-    # For production, you might want to use a reverse proxy
-    # ports:
-    #   - "127.0.0.1:8000:8000"  # Only localhost access
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"  # Expose on all interfaces for LXC access
     volumes:
       - ./uploads:/app/uploads  # Persistent image storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/recipes"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     
   # Remove migration service in production
   migrate:
