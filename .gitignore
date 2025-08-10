@@ -41,6 +41,11 @@ postgres_data/
 uploads/
 static/uploads/
 
+# Keep static assets (logos, etc.)
+!static/logo.png
+!static/*.css
+!static/*.js
+
 # Environment variables
 .env
 .env.local

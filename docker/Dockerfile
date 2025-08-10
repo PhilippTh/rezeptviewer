@@ -24,6 +24,7 @@ COPY src/database.py .
 # Create static directory and copy frontend
 RUN mkdir -p /app/static /app/uploads
 COPY static/frontend.html ./static/
+COPY static/logo.png ./static/
 
 # Expose port
 EXPOSE 8000

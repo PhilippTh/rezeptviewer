@@ -17,6 +17,36 @@
             text-align: center;
             color: #333;
             margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo {
+            max-height: 80px;
+            max-width: 200px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+        
+        .header-text {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+        }
+        
+        .header p {
+            margin: 0;
+            color: #666;
+            font-style: italic;
         }
         
         .controls {
@@ -127,12 +157,74 @@
             height: 100px;
             resize: vertical;
         }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                background-color: white !important;
+                max-width: none;
+                margin: 0;
+                padding: 15px;
+            }
+            
+            .controls, .add-recipe-form {
+                display: none !important;
+            }
+            
+            .header {
+                margin-bottom: 20px;
+                page-break-after: avoid;
+            }
+            
+            .logo {
+                max-height: 60px;
+                max-width: 150px;
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+            
+            .recipe-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .recipe-card {
+                box-shadow: none;
+                border: 1px solid #ddd;
+                page-break-inside: avoid;
+                margin-bottom: 15px;
+            }
+            
+            .recipe-card:hover {
+                transform: none;
+            }
+            
+            .recipe-title {
+                color: #000 !important;
+                font-size: 1.1em;
+            }
+            
+            .recipe-meta {
+                color: #444 !important;
+            }
+            
+            .recipe-section h4 {
+                color: #000 !important;
+            }
+            
+            .recipe-section p {
+                color: #000 !important;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🍽️ Rezept Viewer</h1>
-        <p>Rezepte von Papa</p>
+        <img src="/static/logo.png" alt="Waldschenke Logo" class="logo">
+        <div class="header-text">
+            <h1>🍽️ Rezept Viewer</h1>
+            <p>Rezepte von Papa</p>
+        </div>
     </div>
 
     <div class="controls">
