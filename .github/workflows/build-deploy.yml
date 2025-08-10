@@ -1,8 +1,12 @@
-name: Weekly Container Build
+name: Container Build & Deploy
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   schedule:
-    # Runs every Monday at 09:00 AM UTC
+    # Weekly rebuild with fresh base images every Monday at 09:00 AM UTC
     - cron: '0 9 * * 1'
   workflow_dispatch: # Allow manual triggering
 
@@ -90,7 +94,7 @@ jobs:
 
     - name: Create release summary
       run: |
-        echo "# 📦 Weekly Container Build Complete" >> $GITHUB_STEP_SUMMARY
+        echo "# 📦 Container Build Complete" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "## 🔄 Built Images:" >> $GITHUB_STEP_SUMMARY
         echo "- **Web Application**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/web:latest\`" >> $GITHUB_STEP_SUMMARY
