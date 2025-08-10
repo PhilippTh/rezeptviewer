@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -131,16 +131,46 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
     return recipe
 
 @app.post("/recipes", response_model=RecipeResponse)
-def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
+async def create_recipe(
+    title: str = Form(...),
+    category: str = Form(""),
+    portions: str = Form(""),
+    ingredients: str = Form(...),
+    instructions: str = Form(""),
+    notes: str = Form(""),
+    image: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    # Handle image upload if provided
+    image_filename = None
+    if image and image.filename:
+        # Validate file type
+        allowed_types = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+        if image.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+        
+        # Save image
+        file_extension = image.filename.split('.')[-1].lower()
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = UPLOAD_DIR / unique_filename
+        
+        try:
+            with open(file_path, "wb") as buffer:
+                content = await image.read()
+                buffer.write(content)
+            image_filename = unique_filename
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Could not save image: {str(e)}")
+    
     db_recipe = Recipe(
-        title=recipe.title,
-        category=recipe.category or "",
-        portions=recipe.portions or "",
-        ingredients=recipe.ingredients,
-        instructions=recipe.instructions or "",
-        notes=recipe.notes or "",
+        title=title,
+        category=category or "",
+        portions=portions or "",
+        ingredients=ingredients,
+        instructions=instructions or "",
+        notes=notes or "",
         created_date=datetime.now().date(),
-        image_filename=recipe.image_filename
+        image_filename=image_filename
     )
     db.add(db_recipe)
     db.commit()
@@ -148,19 +178,56 @@ def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
     return db_recipe
 
 @app.put("/recipes/{recipe_id}", response_model=RecipeResponse)
-def update_recipe(recipe_id: int, recipe: RecipeCreate, db: Session = Depends(get_db)):
+async def update_recipe(
+    recipe_id: int,
+    title: str = Form(...),
+    category: str = Form(""),
+    portions: str = Form(""),
+    ingredients: str = Form(...),
+    instructions: str = Form(""),
+    notes: str = Form(""),
+    image: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
     db_recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     if db_recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     
-    db_recipe.title = recipe.title
-    db_recipe.category = recipe.category or ""
-    db_recipe.portions = recipe.portions or ""
-    db_recipe.ingredients = recipe.ingredients
-    db_recipe.instructions = recipe.instructions or ""
-    db_recipe.notes = recipe.notes or ""
-    if recipe.image_filename is not None:
-        db_recipe.image_filename = recipe.image_filename
+    # Handle image upload if provided
+    image_filename = db_recipe.image_filename  # Keep existing image by default
+    if image and image.filename:
+        # Validate file type
+        allowed_types = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+        if image.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+        
+        # Delete old image if exists
+        if db_recipe.image_filename:
+            old_file_path = UPLOAD_DIR / db_recipe.image_filename
+            if old_file_path.exists():
+                old_file_path.unlink()
+        
+        # Save new image
+        file_extension = image.filename.split('.')[-1].lower()
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        file_path = UPLOAD_DIR / unique_filename
+        
+        try:
+            with open(file_path, "wb") as buffer:
+                content = await image.read()
+                buffer.write(content)
+            image_filename = unique_filename
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Could not save image: {str(e)}")
+    
+    # Update recipe data
+    db_recipe.title = title
+    db_recipe.category = category or ""
+    db_recipe.portions = portions or ""
+    db_recipe.ingredients = ingredients
+    db_recipe.instructions = instructions or ""
+    db_recipe.notes = notes or ""
+    db_recipe.image_filename = image_filename
     
     db.commit()
     db.refresh(db_recipe)
