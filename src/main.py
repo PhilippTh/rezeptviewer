@@ -63,7 +63,7 @@ def read_root():
 @app.get("/recipes", response_model=List[RecipeResponse])
 def get_recipes(
     skip: int = 0, 
-    limit: int = 100, 
+    limit: int = 1000, 
     search: Optional[str] = Query(None, description="Full-text search across all recipe fields"),
     category: Optional[str] = Query(None, description="Filter by category"),
     db: Session = Depends(get_db)
