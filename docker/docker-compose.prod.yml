@@ -1,0 +1,34 @@
+# Production override for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # For database backups
+    environment:
+      - POSTGRES_DB=rezepte_db
+      - POSTGRES_USER=rezepte_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-rezepte_password}  # Use env var in production
+    # Uncomment for external access (be careful!)
+    # ports:
+    #   - "127.0.0.1:5432:5432"  # Only localhost access
+
+  web:
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://rezepte_user:${DB_PASSWORD:-rezepte_password}@postgres/rezepte_db
+      # - SENTRY_DSN=${SENTRY_DSN}  # Uncomment for error tracking
+      # - LOG_LEVEL=INFO
+    # For production, you might want to use a reverse proxy
+    # ports:
+    #   - "127.0.0.1:8000:8000"  # Only localhost access
+    volumes:
+      - ./uploads:/app/uploads  # Persistent image storage
+    
+  # Remove migration service in production
+  migrate:
+    profiles:
+      - migrate
+      - never  # Prevent accidental running in production

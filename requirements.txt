@@ -1,0 +1,7 @@
+# Production requirements (no DBF dependency) - 2025 versions
+fastapi[standard]==0.116.1
+uvicorn[standard]==0.35.0
+sqlalchemy[asyncio]==2.0.42
+psycopg2-binary==2.9.10
+pydantic==2.11.7
+python-multipart==0.0.20
