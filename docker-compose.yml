@@ -8,8 +8,6 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rezepte_user -d rezepte_db"]
       interval: 10s
@@ -38,11 +36,13 @@ services:
       dockerfile: docker/Dockerfile
     environment:
       DATABASE_URL: postgresql://rezepte_user:rezepte_password@postgres/rezepte_db
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
 
 volumes:
   postgres_data:
