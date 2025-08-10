@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17
+    container_name: rezeptviewer-postgres
     environment:
       POSTGRES_DB: rezepte_db
       POSTGRES_USER: rezepte_user
@@ -13,12 +14,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   # One-time migration service
   migrate:
     build:
       context: .
       dockerfile: docker/Dockerfile.migrate
+    container_name: rezeptviewer-migrate
     environment:
       DATABASE_URL: postgresql://rezepte_user:rezepte_password@postgres/rezepte_db
       DBF_FILE: Rezepte.dbf
@@ -34,6 +37,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    container_name: rezeptviewer-web
     environment:
       DATABASE_URL: postgresql://rezepte_user:rezepte_password@postgres/rezepte_db
     expose:
@@ -43,6 +47,14 @@ services:
         condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
+    networks:
+      - default
+      - proxy-net
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+
+networks:
+  proxy-net:
+    external: true
