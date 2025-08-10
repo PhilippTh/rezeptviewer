@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from typing import List, Optional
@@ -13,6 +14,15 @@ from pathlib import Path
 from database import get_db, Recipe, create_tables
 
 app = FastAPI(title="Recipe Viewer", description="Web app for viewing and managing recipes")
+
+# Add CORS middleware to ensure proper encoding
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Create uploads directory
 UPLOAD_DIR = Path("uploads")
@@ -29,11 +39,11 @@ async def startup_event():
 
 class RecipeBase(BaseModel):
     title: str
-    category: str
-    portions: str
+    category: Optional[str] = None
+    portions: Optional[str] = None
     ingredients: str
-    instructions: str
-    notes: str
+    instructions: Optional[str] = None
+    notes: Optional[str] = None
     image_filename: Optional[str] = None
 
 class RecipeCreate(RecipeBase):
@@ -124,11 +134,11 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
 def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
     db_recipe = Recipe(
         title=recipe.title,
-        category=recipe.category,
-        portions=recipe.portions,
+        category=recipe.category or "",
+        portions=recipe.portions or "",
         ingredients=recipe.ingredients,
-        instructions=recipe.instructions,
-        notes=recipe.notes,
+        instructions=recipe.instructions or "",
+        notes=recipe.notes or "",
         created_date=datetime.now().date(),
         image_filename=recipe.image_filename
     )
@@ -136,6 +146,41 @@ def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_recipe)
     return db_recipe
+
+@app.put("/recipes/{recipe_id}", response_model=RecipeResponse)
+def update_recipe(recipe_id: int, recipe: RecipeCreate, db: Session = Depends(get_db)):
+    db_recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if db_recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    db_recipe.title = recipe.title
+    db_recipe.category = recipe.category or ""
+    db_recipe.portions = recipe.portions or ""
+    db_recipe.ingredients = recipe.ingredients
+    db_recipe.instructions = recipe.instructions or ""
+    db_recipe.notes = recipe.notes or ""
+    if recipe.image_filename is not None:
+        db_recipe.image_filename = recipe.image_filename
+    
+    db.commit()
+    db.refresh(db_recipe)
+    return db_recipe
+
+@app.delete("/recipes/{recipe_id}")
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Delete associated image if exists
+    if recipe.image_filename:
+        file_path = UPLOAD_DIR / recipe.image_filename
+        if file_path.exists():
+            file_path.unlink()
+    
+    db.delete(recipe)
+    db.commit()
+    return {"message": "Recipe deleted successfully"}
 
 @app.get("/categories")
 def get_categories(db: Session = Depends(get_db)):

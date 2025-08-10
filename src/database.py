@@ -20,7 +20,7 @@ class Recipe(Base):
 
 import os
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://rezepte_user:rezepte_password@localhost/rezepte_db")
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, connect_args={"client_encoding": "utf8"})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
