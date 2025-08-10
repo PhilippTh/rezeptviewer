@@ -917,7 +917,7 @@
         function resetForm() {
             editingRecipeId = null;
             document.getElementById('formTitle').textContent = '➕ Neues Rezept hinzufügen';
-            document.getElementById('addRecipeForm').reset();
+            document.querySelector('#addRecipeForm form').reset();
         }
 
         async function submitRecipe(event) {
