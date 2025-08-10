@@ -145,9 +145,12 @@ docker compose exec postgres psql -U rezepte_user -d rezepte_db < backups/recipe
 ### Produktions-Umgebung:
 
 - Nutzt `docker-compose.prod.yml` für Produktions-Overrides
+- **Nginx Reverse Proxy** auf Port 80/443 mit SSL-Unterstützung
 - Automatische Container-Neustarts (`restart: unless-stopped`)
 - Umgebungsvariable für Datenbankpasswort (`DB_PASSWORD`)
 - Persistente Datenspeicherung für Uploads und Backups
+- Rate Limiting und Security Headers
+- Gzip-Kompression und Caching
 
 ## 🔧 Technische Details
 

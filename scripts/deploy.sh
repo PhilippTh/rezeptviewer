@@ -66,11 +66,24 @@ fi
 echo "🚀 Starting web application..."
 docker compose up -d web
 
+# Step 6b: Start nginx reverse proxy (if using production config)
+if [ -f "docker/docker-compose.prod.yml" ]; then
+    echo "🌐 Starting Nginx reverse proxy..."
+    docker compose -f docker-compose.yml -f docker/docker-compose.prod.yml up -d nginx
+fi
+
 # Step 7: Wait for web service to be ready
 echo "⏳ Waiting for web service to be ready..."
 timeout=30
 counter=0
-until curl -s http://localhost:8000/recipes >/dev/null 2>&1; do
+# Check port 80 if nginx is running, otherwise port 8000
+if docker compose ps nginx >/dev/null 2>&1 && docker compose ps nginx | grep -q "Up"; then
+    CHECK_URL="http://localhost/recipes"
+else
+    CHECK_URL="http://localhost:8000/recipes"
+fi
+
+until curl -s "$CHECK_URL" >/dev/null 2>&1; do
     counter=$((counter + 1))
     if [ $counter -eq $timeout ]; then
         echo "❌ Web service failed to start within $timeout seconds"
@@ -83,13 +96,18 @@ done
 
 # Step 8: Final verification
 echo "🔍 Final verification..."
-FINAL_COUNT=$(curl -s http://localhost:8000/recipes | jq length 2>/dev/null || echo "0")
+FINAL_COUNT=$(curl -s "$CHECK_URL" | jq length 2>/dev/null || echo "0")
 echo "✅ Web service is ready! Serving $FINAL_COUNT recipes."
 
 echo ""
 echo "🎉 Deployment completed successfully!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📱 Recipe Viewer: http://localhost:8000"
+if docker compose ps nginx >/dev/null 2>&1 && docker compose ps nginx | grep -q "Up"; then
+    echo "🌐 Recipe Viewer: http://localhost (via Nginx)"
+    echo "🔒 Direct access: http://localhost:8000 (internal only)"
+else
+    echo "📱 Recipe Viewer: http://localhost:8000"
+fi
 echo "🗄️  Database: PostgreSQL 17 on port 5432"
 echo "📊 Total recipes: $FINAL_COUNT"
 echo ""
