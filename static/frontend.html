@@ -73,6 +73,10 @@
         }
         
         .admin-buttons.show {
+            display: block;
+        }
+        
+        .admin-buttons.show.btn {
             display: inline-flex;
         }
         
@@ -652,11 +656,16 @@
 
         async function checkAuthStatus() {
             try {
-                const response = await fetch(`${API_BASE}/auth/me`);
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    credentials: 'include' // Include cookies in request
+                });
                 const result = await response.json();
+                
+                console.log('Auth status check:', result); // Debug log
                 
                 if (result.authenticated) {
                     currentUser = result.user;
+                    console.log('User authenticated:', currentUser); // Debug log
                     showUserSection();
                     updateAdminButtons();
                 } else {
@@ -666,7 +675,9 @@
                 }
             } catch (error) {
                 console.error('Error checking auth status:', error);
+                currentUser = null;
                 showLoginSection();
+                updateAdminButtons();
             }
         }
 
@@ -690,6 +701,9 @@
                     button.classList.remove('show');
                 }
             });
+            
+            // Refresh recipes to show/hide edit/delete buttons
+            displayRecipes(allRecipes);
         }
 
         async function login() {
@@ -705,12 +719,14 @@
                 const response = await fetch(`${API_BASE}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include' // Include cookies in request
                 });
                 
                 if (response.ok) {
                     const result = await response.json();
                     currentUser = result.user;
+                    console.log('Login successful, user:', currentUser); // Debug log
                     showUserSection();
                     updateAdminButtons();
                     
@@ -720,6 +736,8 @@
                     
                     alert(`Willkommen, ${currentUser.username}!`);
                 } else {
+                    const errorText = await response.text();
+                    console.error('Login failed:', response.status, errorText);
                     alert('Ungültige Anmeldedaten.');
                 }
             } catch (error) {
@@ -730,7 +748,10 @@
 
         async function logout() {
             try {
-                await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+                await fetch(`${API_BASE}/auth/logout`, { 
+                    method: 'POST',
+                    credentials: 'include'
+                });
                 currentUser = null;
                 showLoginSection();
                 updateAdminButtons();
@@ -1100,7 +1121,8 @@
 
             try {
                 const response = await fetch(`${API_BASE}/recipes/${recipeId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    credentials: 'include'
                 });
 
                 if (response.ok) {
@@ -1159,7 +1181,8 @@
                 
                 const response = await fetch(url, {
                     method: method,
-                    body: formData
+                    body: formData,
+                    credentials: 'include'
                 });
                 
                 if (response.ok) {
@@ -1264,7 +1287,8 @@
                 const response = await fetch(`${API_BASE}/categories/${encodeURIComponent(oldName)}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newName })
+                    body: JSON.stringify({ name: newName }),
+                    credentials: 'include'
                 });
                 
                 if (response.ok) {
@@ -1295,7 +1319,8 @@
                 const response = await fetch(`${API_BASE}/categories`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: categoryName })
+                    body: JSON.stringify({ name: categoryName }),
+                    credentials: 'include'
                 });
                 
                 if (response.ok) {
@@ -1327,7 +1352,8 @@
             
             try {
                 const response = await fetch(`${API_BASE}/categories/${encodeURIComponent(categoryName)}?action=${action}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    credentials: 'include'
                 });
                 
                 if (response.ok) {
