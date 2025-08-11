@@ -11,7 +11,7 @@ import os
 import uuid
 import re
 from pathlib import Path
-from database import get_db, Recipe, create_tables
+from database import get_db, Recipe, Category, create_tables
 
 app = FastAPI(title="Recipe Viewer", description="Web app for viewing and managing recipes")
 
@@ -260,17 +260,33 @@ class CategoryResponse(BaseModel):
 
 @app.get("/categories", response_model=List[CategoryResponse])
 def get_categories(db: Session = Depends(get_db)):
-    # Get categories with recipe counts
-    result = db.query(
+    # Get all categories from Category table and recipe categories with counts
+    category_recipes = db.query(
         Recipe.category.label('name'),
         func.count(Recipe.id).label('recipe_count')
     ).filter(
         Recipe.category.isnot(None),
         Recipe.category != ""
-    ).group_by(Recipe.category).order_by(Recipe.category).all()
+    ).group_by(Recipe.category).all()
     
+    # Get standalone categories from Category table
+    standalone_categories = db.query(Category).all()
+    
+    # Combine and deduplicate
+    category_dict = {}
+    
+    # Add recipe categories with counts
+    for name, count in category_recipes:
+        category_dict[name] = count
+    
+    # Add standalone categories (with 0 count if not in recipes)
+    for cat in standalone_categories:
+        if cat.name not in category_dict:
+            category_dict[cat.name] = 0
+    
+    # Convert to response format
     categories = []
-    for i, (name, count) in enumerate(result, 1):
+    for i, (name, count) in enumerate(sorted(category_dict.items()), 1):
         categories.append(CategoryResponse(id=i, name=name, recipe_count=count))
     
     return categories
@@ -278,30 +294,55 @@ def get_categories(db: Session = Depends(get_db)):
 @app.get("/categories/simple")
 def get_simple_categories(db: Session = Depends(get_db)):
     """Simple list of category names for backwards compatibility"""
-    categories = db.query(Recipe.category).distinct().all()
-    return [cat[0] for cat in categories if cat[0]]
+    # Get categories from both tables
+    recipe_categories = db.query(Recipe.category).distinct().all()
+    standalone_categories = db.query(Category.name).all()
+    
+    # Combine and deduplicate
+    all_categories = set()
+    for cat in recipe_categories:
+        if cat[0]:
+            all_categories.add(cat[0])
+    for cat in standalone_categories:
+        all_categories.add(cat[0])
+    
+    return sorted(list(all_categories))
 
 @app.post("/categories", response_model=dict)
 def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
-    """Create a new category by updating a recipe's category field"""
-    # Check if category already exists
-    existing = db.query(Recipe).filter(Recipe.category == category.name).first()
-    if existing:
+    """Create a new category"""
+    # Check if category already exists in Category table or recipes
+    existing_category = db.query(Category).filter(Category.name == category.name).first()
+    existing_recipe_category = db.query(Recipe).filter(Recipe.category == category.name).first()
+    
+    if existing_category or existing_recipe_category:
         return {"message": "Category already exists", "category": category.name}
     
-    # For now, we'll just return success - categories are created when recipes use them
-    return {"message": "Category will be created when first used", "category": category.name}
+    # Create new category
+    db_category = Category(name=category.name)
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+    
+    return {"message": f"Category '{category.name}' created successfully", "category": category.name}
 
 @app.put("/categories/{old_name}")
 def update_category(old_name: str, category: CategoryCreate, db: Session = Depends(get_db)):
-    """Rename a category across all recipes"""
+    """Rename a category across all recipes and standalone categories"""
     # Update all recipes with the old category name
     updated_count = db.query(Recipe).filter(
         Recipe.category == old_name
     ).update({Recipe.category: category.name})
     
-    if updated_count == 0:
+    # Check for standalone category
+    standalone_category = db.query(Category).filter(Category.name == old_name).first()
+    
+    if updated_count == 0 and not standalone_category:
         raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Update standalone category if it exists
+    if standalone_category:
+        standalone_category.name = category.name
     
     db.commit()
     return {"message": f"Renamed category '{old_name}' to '{category.name}'", "updated_recipes": updated_count}
@@ -310,11 +351,13 @@ def update_category(old_name: str, category: CategoryCreate, db: Session = Depen
 def delete_category(category_name: str, action: str = Query("clear", description="Action: 'clear' or 'delete_recipes'"), db: Session = Depends(get_db)):
     """Delete/clear a category"""
     recipes_with_category = db.query(Recipe).filter(Recipe.category == category_name).all()
+    standalone_category = db.query(Category).filter(Category.name == category_name).first()
     
-    if not recipes_with_category:
+    # Check if category exists anywhere
+    if not recipes_with_category and not standalone_category:
         raise HTTPException(status_code=404, detail="Category not found")
     
-    if action == "delete_recipes":
+    if action == "delete_recipes" and recipes_with_category:
         # Delete all recipes in this category
         for recipe in recipes_with_category:
             # Delete associated images
@@ -324,15 +367,31 @@ def delete_category(category_name: str, action: str = Query("clear", description
                     file_path.unlink()
             db.delete(recipe)
         deleted_count = len(recipes_with_category)
+        
+        # Also delete standalone category if it exists
+        if standalone_category:
+            db.delete(standalone_category)
+        
         db.commit()
         return {"message": f"Deleted category '{category_name}' and {deleted_count} recipes"}
     else:
-        # Just clear the category (set to empty)
-        updated_count = db.query(Recipe).filter(
-            Recipe.category == category_name
-        ).update({Recipe.category: ""})
+        # Clear the category from recipes (set to empty)
+        updated_count = 0
+        if recipes_with_category:
+            updated_count = db.query(Recipe).filter(
+                Recipe.category == category_name
+            ).update({Recipe.category: ""})
+        
+        # Delete standalone category
+        if standalone_category:
+            db.delete(standalone_category)
+        
         db.commit()
-        return {"message": f"Cleared category '{category_name}' from {updated_count} recipes"}
+        
+        if updated_count > 0:
+            return {"message": f"Cleared category '{category_name}' from {updated_count} recipes"}
+        else:
+            return {"message": f"Deleted empty category '{category_name}'"}
 
 @app.get("/recipes/category/{category}", response_model=List[RecipeResponse])
 def get_recipes_by_category(category: str, db: Session = Depends(get_db)):
