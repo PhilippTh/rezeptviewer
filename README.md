@@ -85,21 +85,33 @@ python src/main.py
 
 ## 📊 API Endpoints
 
+### Rezept-Verwaltung
 - `GET /` - Weiterleitung zur Web-App
-- `GET /recipes` - Alle Rezepte
+- `GET /recipes` - Alle Rezepte (bis zu 1000, mit Such- und Kategorie-Filter)
 - `GET /recipes/{id}` - Einzelnes Rezept
-- `POST /recipes` - Neues Rezept erstellen
-- `GET /categories` - Alle Kategorien
+- `POST /recipes` - Neues Rezept erstellen (mit Bild-Upload)
+- `PUT /recipes/{id}` - Rezept aktualisieren
+- `DELETE /recipes/{id}` - Rezept löschen
 - `GET /recipes/category/{category}` - Rezepte nach Kategorie
+
+### Kategorie-Management
+- `GET /categories` - Alle Kategorien mit Rezept-Anzahl
+- `GET /categories/simple` - Einfache Kategorie-Liste
+- `POST /categories` - Neue Kategorie erstellen
+- `PUT /categories/{old_name}` - Kategorie umbenennen (alle Rezepte aktualisiert)
+- `DELETE /categories/{category_name}` - Kategorie löschen oder leeren
 
 ## ✨ Features
 
 - ✅ Einmalige DBF-Migration (122 Rezepte von Papa)
 - ✅ PostgreSQL Datenbank mit Docker
-- ✅ FastAPI REST API
-- ✅ Responsive Web-Interface
-- ✅ Such- und Filterfunktionen
-- ✅ Neue Rezepte hinzufügen
+- ✅ FastAPI REST API (unterstützt bis zu 1000 Rezepte)
+- ✅ Responsive Web-Interface mit Waldschenke-Logo
+- ✅ Erweiterte Such- und Filterfunktionen
+- ✅ Vollständige Rezept-Verwaltung (CRUD-Operationen)
+- ✅ Umfassende Kategorie-Verwaltung mit Umbenennen/Löschen
+- ✅ Bild-Upload für Rezepte
+- ✅ Proxy-Netzwerk Integration für Reverse-Proxy-Setups
 - ✅ Vollständig containerisiert
 
 ## 🚀 Produktive Bereitstellung
@@ -146,6 +158,7 @@ docker compose exec postgres psql -U rezepte_user -d rezepte_db < backups/recipe
 
 - Nutzt `docker-compose.prod.yml` für Produktions-Overrides
 - **Nginx Reverse Proxy** auf Port 80/443 mit SSL-Unterstützung
+- **Proxy-Net Integration**: Verbindet sich automatisch mit externem `proxy-net` Netzwerk für Reverse-Proxy-Setups (Caddy/Traefik)
 - Automatische Container-Neustarts (`restart: unless-stopped`)
 - Umgebungsvariable für Datenbankpasswort (`DB_PASSWORD`)
 - Persistente Datenspeicherung für Uploads und Backups
