@@ -46,6 +46,36 @@
             gap: 8px;
         }
         
+        .auth-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .login-form {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #e6fffa;
+            border-radius: 6px;
+            border: 1px solid #81e6d9;
+        }
+        
+        .admin-buttons {
+            display: none;
+        }
+        
+        .admin-buttons.show {
+            display: inline-flex;
+        }
+        
         .header h1 {
             margin: 0;
             font-size: 2.2em;
@@ -478,6 +508,17 @@
         <div class="header-text">
             <h1>🍽️ Rezept Viewer</h1>
         </div>
+        <div class="auth-section">
+            <div id="loginSection" class="login-form">
+                <input type="text" id="username" placeholder="Benutzername" style="padding: 6px 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                <input type="password" id="password" placeholder="Passwort" style="padding: 6px 8px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                <button class="btn btn-primary btn-small" onclick="login()">🔓 Login</button>
+            </div>
+            <div id="userSection" class="user-info" style="display: none;">
+                <span id="userDisplay"></span>
+                <button class="btn btn-secondary btn-small" onclick="logout()">🔒 Logout</button>
+            </div>
+        </div>
         <img src="/static/logo.png" alt="Waldschenke Logo" class="logo">
     </div>
 
@@ -485,7 +526,7 @@
         <div class="controls-section">
             <h3>🍳 Rezept-Verwaltung</h3>
             <div class="controls-row">
-                <button class="btn btn-primary" onclick="toggleAddForm()">
+                <button class="btn btn-primary admin-buttons" onclick="toggleAddForm()">
                     ➕ Neues Rezept hinzufügen
                 </button>
                 <button class="btn btn-secondary" onclick="generateShoppingList()">
@@ -515,7 +556,7 @@
             </div>
         </div>
         
-        <div class="controls-section">
+        <div class="controls-section admin-buttons">
             <h3>🏷️ Kategorien verwalten</h3>
             <div class="controls-row">
                 <button class="btn btn-secondary" onclick="toggleCategoryManagement()">
@@ -594,11 +635,111 @@
         const API_BASE = '';
         let allRecipes = [];
         let currentSort = 'title';
+        let currentUser = null;
 
         document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
             loadRecipes();
             loadCategories();
+            
+            // Add Enter key support for login
+            document.getElementById('password').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    login();
+                }
+            });
         });
+
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`);
+                const result = await response.json();
+                
+                if (result.authenticated) {
+                    currentUser = result.user;
+                    showUserSection();
+                    updateAdminButtons();
+                } else {
+                    currentUser = null;
+                    showLoginSection();
+                    updateAdminButtons();
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                showLoginSection();
+            }
+        }
+
+        function showLoginSection() {
+            document.getElementById('loginSection').style.display = 'flex';
+            document.getElementById('userSection').style.display = 'none';
+        }
+
+        function showUserSection() {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('userSection').style.display = 'flex';
+            document.getElementById('userDisplay').textContent = `👤 ${currentUser.username}${currentUser.is_admin ? ' (Admin)' : ''}`;
+        }
+
+        function updateAdminButtons() {
+            const adminButtons = document.querySelectorAll('.admin-buttons');
+            adminButtons.forEach(button => {
+                if (currentUser && currentUser.is_admin) {
+                    button.classList.add('show');
+                } else {
+                    button.classList.remove('show');
+                }
+            });
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Bitte Benutzername und Passwort eingeben.');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    currentUser = result.user;
+                    showUserSection();
+                    updateAdminButtons();
+                    
+                    // Clear login form
+                    document.getElementById('username').value = '';
+                    document.getElementById('password').value = '';
+                    
+                    alert(`Willkommen, ${currentUser.username}!`);
+                } else {
+                    alert('Ungültige Anmeldedaten.');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Fehler beim Anmelden.');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+                currentUser = null;
+                showLoginSection();
+                updateAdminButtons();
+                alert('Erfolgreich abgemeldet.');
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Fehler beim Abmelden.');
+            }
+        }
 
         async function loadRecipes() {
             try {
@@ -694,12 +835,14 @@
                         <button class="btn btn-small btn-secondary" onclick="printRecipe(${recipe.id})">
                             🖨️ Drucken
                         </button>
+                        ${currentUser && currentUser.is_admin ? `
                         <button class="btn btn-small btn-primary" onclick="editRecipe(${recipe.id})">
                             ✏️ Bearbeiten
                         </button>
                         <button class="btn btn-small btn-danger" onclick="deleteRecipe(${recipe.id})">
                             🗑️ Löschen
                         </button>
+                        ` : ''}
                     </div>
                     
                     <div class="recipe-meta">

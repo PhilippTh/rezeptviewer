@@ -1,9 +1,26 @@
-from sqlalchemy import create_engine, Column, Integer, String, Date, Text, func, text
+from sqlalchemy import create_engine, Column, Integer, String, Date, Text, func, text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+import hashlib
 
 Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    is_admin = Column(Boolean, default=False)
+    created_date = Column(Date, default=datetime.now().date)
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def verify_password(self, password: str) -> bool:
+        return self.password_hash == self.hash_password(password)
 
 class Category(Base):
     __tablename__ = "categories"
@@ -39,6 +56,24 @@ def get_db():
 
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    
+    # Create default admin user if no users exist
+    db = SessionLocal()
+    try:
+        user_count = db.query(User).count()
+        if user_count == 0:
+            # Create default admin user
+            admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+            admin_user = User(
+                username="admin",
+                password_hash=User.hash_password(admin_password),
+                is_admin=True
+            )
+            db.add(admin_user)
+            db.commit()
+            print(f"Created default admin user with password: {admin_password}")
+    finally:
+        db.close()
     
     # Create full-text search index for German language
     with engine.connect() as conn:

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile, Form
+from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile, Form, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +11,7 @@ import os
 import uuid
 import re
 from pathlib import Path
-from database import get_db, Recipe, Category, create_tables
+from database import get_db, Recipe, Category, User, create_tables
 
 app = FastAPI(title="Recipe Viewer", description="Web app for viewing and managing recipes")
 
@@ -31,6 +31,23 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# Session management
+SESSIONS = {}  # Simple in-memory session store
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optional[User]:
+    session_id = request.cookies.get("session_id")
+    if not session_id or session_id not in SESSIONS:
+        return None
+    
+    username = SESSIONS[session_id]
+    return db.query(User).filter(User.username == username).first()
+
+def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
+    user = get_current_user(request, db)
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 # Create tables on startup
 @app.on_event("startup")
@@ -59,6 +76,50 @@ class RecipeResponse(RecipeBase):
 @app.get("/")
 def read_root():
     return RedirectResponse(url="/static/frontend.html")
+
+# Authentication endpoints
+@app.post("/auth/login")
+async def login(login_request: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == login_request.username).first()
+    
+    if not user or not user.verify_password(login_request.password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Create session
+    session_id = str(uuid.uuid4())
+    SESSIONS[session_id] = user.username
+    
+    # Set secure cookie
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=86400  # 24 hours
+    )
+    
+    return {"message": "Login successful", "user": UserInfo(username=user.username, is_admin=user.is_admin)}
+
+@app.post("/auth/logout")
+async def logout(request: Request, response: Response):
+    session_id = request.cookies.get("session_id")
+    if session_id in SESSIONS:
+        del SESSIONS[session_id]
+    
+    response.delete_cookie("session_id")
+    return {"message": "Logout successful"}
+
+@app.get("/auth/me")
+async def get_current_user_info(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return {"authenticated": False}
+    
+    return {
+        "authenticated": True, 
+        "user": UserInfo(username=user.username, is_admin=user.is_admin)
+    }
 
 @app.get("/recipes", response_model=List[RecipeResponse])
 def get_recipes(
@@ -132,6 +193,7 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
 
 @app.post("/recipes", response_model=RecipeResponse)
 async def create_recipe(
+    request: Request,
     title: str = Form(...),
     category: str = Form(""),
     portions: str = Form(""),
@@ -139,7 +201,8 @@ async def create_recipe(
     instructions: str = Form(""),
     notes: str = Form(""),
     image: UploadFile = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     # Handle image upload if provided
     image_filename = None
@@ -180,6 +243,7 @@ async def create_recipe(
 @app.put("/recipes/{recipe_id}", response_model=RecipeResponse)
 async def update_recipe(
     recipe_id: int,
+    request: Request,
     title: str = Form(...),
     category: str = Form(""),
     portions: str = Form(""),
@@ -187,7 +251,8 @@ async def update_recipe(
     instructions: str = Form(""),
     notes: str = Form(""),
     image: UploadFile = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     db_recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     if db_recipe is None:
@@ -234,7 +299,7 @@ async def update_recipe(
     return db_recipe
 
 @app.delete("/recipes/{recipe_id}")
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
+def delete_recipe(recipe_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
@@ -252,6 +317,14 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
 # Category Management
 class CategoryCreate(BaseModel):
     name: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserInfo(BaseModel):
+    username: str
+    is_admin: bool
 
 class CategoryResponse(BaseModel):
     id: int
@@ -309,7 +382,7 @@ def get_simple_categories(db: Session = Depends(get_db)):
     return sorted(list(all_categories))
 
 @app.post("/categories", response_model=dict)
-def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
+def create_category(category: CategoryCreate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Create a new category"""
     # Check if category already exists in Category table or recipes
     existing_category = db.query(Category).filter(Category.name == category.name).first()
@@ -327,7 +400,7 @@ def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
     return {"message": f"Category '{category.name}' created successfully", "category": category.name}
 
 @app.put("/categories/{old_name}")
-def update_category(old_name: str, category: CategoryCreate, db: Session = Depends(get_db)):
+def update_category(old_name: str, category: CategoryCreate, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Rename a category across all recipes and standalone categories"""
     # Update all recipes with the old category name
     updated_count = db.query(Recipe).filter(
@@ -348,7 +421,7 @@ def update_category(old_name: str, category: CategoryCreate, db: Session = Depen
     return {"message": f"Renamed category '{old_name}' to '{category.name}'", "updated_recipes": updated_count}
 
 @app.delete("/categories/{category_name}")
-def delete_category(category_name: str, action: str = Query("clear", description="Action: 'clear' or 'delete_recipes'"), db: Session = Depends(get_db)):
+def delete_category(category_name: str, action: str = Query("clear", description="Action: 'clear' or 'delete_recipes'"), request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Delete/clear a category"""
     recipes_with_category = db.query(Recipe).filter(Recipe.category == category_name).all()
     standalone_category = db.query(Category).filter(Category.name == category_name).first()
@@ -522,7 +595,7 @@ def scale_recipe_portions(recipe_id: int, scale_request: PortionScale, db: Sessi
     )
 
 @app.post("/recipes/{recipe_id}/image")
-async def upload_recipe_image(recipe_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_recipe_image(recipe_id: int, file: UploadFile = File(...), request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Upload an image for a recipe"""
     recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     if recipe is None:
@@ -553,7 +626,7 @@ async def upload_recipe_image(recipe_id: int, file: UploadFile = File(...), db: 
         raise HTTPException(status_code=500, detail=f"Could not save image: {str(e)}")
 
 @app.delete("/recipes/{recipe_id}/image")
-def delete_recipe_image(recipe_id: int, db: Session = Depends(get_db)):
+def delete_recipe_image(recipe_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Delete an image for a recipe"""
     recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     if recipe is None:
