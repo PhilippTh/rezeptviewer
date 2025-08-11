@@ -421,7 +421,7 @@ def update_category(old_name: str, category: CategoryCreate, request: Request, d
     return {"message": f"Renamed category '{old_name}' to '{category.name}'", "updated_recipes": updated_count}
 
 @app.delete("/categories/{category_name}")
-def delete_category(category_name: str, action: str = Query("clear", description="Action: 'clear' or 'delete_recipes'"), request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+def delete_category(category_name: str, request: Request, action: str = Query("clear", description="Action: 'clear' or 'delete_recipes'"), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Delete/clear a category"""
     recipes_with_category = db.query(Recipe).filter(Recipe.category == category_name).all()
     standalone_category = db.query(Category).filter(Category.name == category_name).first()
@@ -595,7 +595,7 @@ def scale_recipe_portions(recipe_id: int, scale_request: PortionScale, db: Sessi
     )
 
 @app.post("/recipes/{recipe_id}/image")
-async def upload_recipe_image(recipe_id: int, file: UploadFile = File(...), request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+async def upload_recipe_image(recipe_id: int, request: Request, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Upload an image for a recipe"""
     recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     if recipe is None:
