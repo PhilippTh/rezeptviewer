@@ -54,6 +54,15 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
 async def startup_event():
     create_tables()
 
+# Authentication models
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserInfo(BaseModel):
+    username: str
+    is_admin: bool
+
 class RecipeBase(BaseModel):
     title: str
     category: Optional[str] = None
@@ -317,14 +326,6 @@ def delete_recipe(recipe_id: int, request: Request, db: Session = Depends(get_db
 # Category Management
 class CategoryCreate(BaseModel):
     name: str
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class UserInfo(BaseModel):
-    username: str
-    is_admin: bool
 
 class CategoryResponse(BaseModel):
     id: int
