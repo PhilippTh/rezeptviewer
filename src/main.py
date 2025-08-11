@@ -63,6 +63,10 @@ class UserInfo(BaseModel):
     username: str
     is_admin: bool
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class RecipeBase(BaseModel):
     title: str
     category: Optional[str] = None
@@ -129,6 +133,19 @@ async def get_current_user_info(request: Request, db: Session = Depends(get_db))
         "authenticated": True, 
         "user": UserInfo(username=user.username, is_admin=user.is_admin)
     }
+
+@app.post("/auth/change-password")
+async def change_password(password_request: PasswordChangeRequest, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    """Change admin password"""
+    # Verify current password
+    if not current_user.verify_password(password_request.current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    current_user.password_hash = User.hash_password(password_request.new_password)
+    db.commit()
+    
+    return {"message": "Password changed successfully"}
 
 @app.get("/recipes", response_model=List[RecipeResponse])
 def get_recipes(

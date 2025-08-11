@@ -520,6 +520,7 @@
             </div>
             <div id="userSection" class="user-info" style="display: none;">
                 <span id="userDisplay"></span>
+                <button class="btn btn-secondary btn-small" onclick="showPasswordChangeForm()">🔑 Passwort ändern</button>
                 <button class="btn btn-secondary btn-small" onclick="logout()">🔒 Logout</button>
             </div>
         </div>
@@ -622,6 +623,28 @@
         <div id="categoryList"></div>
         <div style="margin-top: 20px;">
             <button class="btn btn-secondary" onclick="toggleCategoryManagement()">❌ Schließen</button>
+        </div>
+    </div>
+
+    <div class="add-recipe-form" id="passwordChangeForm" style="display: none;">
+        <h3>🔑 Admin-Passwort ändern</h3>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="currentPassword">Aktuelles Passwort:</label>
+                <input type="password" id="currentPassword" required>
+            </div>
+            <div class="form-group">
+                <label for="newPassword">Neues Passwort:</label>
+                <input type="password" id="newPassword" required>
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Passwort bestätigen:</label>
+                <input type="password" id="confirmPassword" required>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" onclick="changePassword()">🔒 Passwort ändern</button>
+            <button class="btn btn-secondary" onclick="closePasswordChangeForm()">❌ Abbrechen</button>
         </div>
     </div>
 
@@ -763,6 +786,63 @@
             } catch (error) {
                 console.error('Logout error:', error);
                 alert('Fehler beim Abmelden.');
+            }
+        }
+
+        function showPasswordChangeForm() {
+            document.getElementById('passwordChangeForm').style.display = 'block';
+            document.getElementById('passwordChangeForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closePasswordChangeForm() {
+            document.getElementById('passwordChangeForm').style.display = 'none';
+            // Clear form
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        }
+
+        async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                alert('Bitte alle Felder ausfüllen.');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                alert('Neues Passwort und Bestätigung stimmen nicht überein.');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('Das neue Passwort muss mindestens 6 Zeichen lang sein.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/change-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    }),
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    alert('Passwort erfolgreich geändert!');
+                    closePasswordChangeForm();
+                } else {
+                    const errorData = await response.json();
+                    alert(`Fehler: ${errorData.detail || 'Passwort konnte nicht geändert werden'}`);
+                }
+            } catch (error) {
+                console.error('Password change error:', error);
+                alert('Fehler beim Ändern des Passworts.');
             }
         }
 
