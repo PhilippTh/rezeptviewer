@@ -514,6 +514,15 @@
                 </select>
             </div>
         </div>
+        
+        <div class="controls-section">
+            <h3>🏷️ Kategorien verwalten</h3>
+            <div class="controls-row">
+                <button class="btn btn-secondary" onclick="toggleCategoryManagement()">
+                    ⚙️ Kategorien bearbeiten
+                </button>
+            </div>
+        </div>
     </div>
 
     <div class="add-recipe-form" id="addRecipeForm">
@@ -526,7 +535,10 @@
                 </div>
                 <div class="form-group">
                     <label for="category">Kategorie:</label>
-                    <input type="text" id="category">
+                    <select id="category">
+                        <option value="">-- Kategorie wählen --</option>
+                    </select>
+                    <input type="text" id="newCategory" placeholder="Neue Kategorie eingeben..." style="margin-top: 8px; display: none;">
                 </div>
                 <div class="form-group">
                     <label for="portions">Portionen:</label>
@@ -558,6 +570,14 @@
                 <button type="button" class="btn btn-secondary" onclick="toggleAddForm()">❌ Abbrechen</button>
             </div>
         </form>
+    </div>
+
+    <div class="add-recipe-form" id="categoryManagement" style="display: none;">
+        <h3>🏷️ Kategorien verwalten</h3>
+        <div id="categoryList"></div>
+        <div style="margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="toggleCategoryManagement()">❌ Schließen</button>
+        </div>
     </div>
 
     <div class="shopping-list" id="shoppingList" style="display: none;">
@@ -593,22 +613,61 @@
 
         async function loadCategories() {
             try {
-                const response = await fetch(`${API_BASE}/categories`);
+                const response = await fetch(`${API_BASE}/categories/simple`);
                 const categories = await response.json();
-                const select = document.getElementById('categoryFilter');
-                select.innerHTML = '<option value="">📂 Alle Kategorien</option>';
+                
+                // Update filter dropdown
+                const filterSelect = document.getElementById('categoryFilter');
+                filterSelect.innerHTML = '<option value="">📂 Alle Kategorien</option>';
+                
+                // Update recipe form dropdown
+                const categorySelect = document.getElementById('category');
+                categorySelect.innerHTML = '<option value="">-- Kategorie wählen --</option>';
+                
                 categories.forEach(cat => {
                     if (cat) {
-                        const option = document.createElement('option');
-                        option.value = cat;
-                        option.textContent = cat;
-                        select.appendChild(option);
+                        // Filter dropdown
+                        const filterOption = document.createElement('option');
+                        filterOption.value = cat;
+                        filterOption.textContent = cat;
+                        filterSelect.appendChild(filterOption);
+                        
+                        // Form dropdown
+                        const formOption = document.createElement('option');
+                        formOption.value = cat;
+                        formOption.textContent = cat;
+                        categorySelect.appendChild(formOption);
                     }
                 });
+                
+                // Add "New Category" option
+                const newOption = document.createElement('option');
+                newOption.value = '__NEW__';
+                newOption.textContent = '+ Neue Kategorie';
+                categorySelect.appendChild(newOption);
+                
             } catch (error) {
                 console.error('Error loading categories:', error);
             }
         }
+
+        // Handle category dropdown change
+        document.addEventListener('DOMContentLoaded', function() {
+            const categorySelect = document.getElementById('category');
+            const newCategoryInput = document.getElementById('newCategory');
+            
+            if (categorySelect) {
+                categorySelect.addEventListener('change', function() {
+                    if (this.value === '__NEW__') {
+                        newCategoryInput.style.display = 'block';
+                        newCategoryInput.focus();
+                    } else {
+                        newCategoryInput.style.display = 'none';
+                        newCategoryInput.value = '';
+                    }
+                });
+            }
+        });
 
         function displayRecipes(recipes) {
             const grid = document.getElementById('recipeGrid');
@@ -925,7 +984,19 @@
             
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
-            formData.append('category', document.getElementById('category').value);
+            
+            // Handle category selection
+            const categorySelect = document.getElementById('category');
+            const newCategoryInput = document.getElementById('newCategory');
+            let categoryValue = '';
+            
+            if (categorySelect.value === '__NEW__' && newCategoryInput.value.trim()) {
+                categoryValue = newCategoryInput.value.trim();
+            } else if (categorySelect.value && categorySelect.value !== '__NEW__') {
+                categoryValue = categorySelect.value;
+            }
+            
+            formData.append('category', categoryValue);
             formData.append('portions', document.getElementById('portions').value);
             formData.append('ingredients', document.getElementById('ingredients').value);
             formData.append('instructions', document.getElementById('instructions').value);
@@ -976,6 +1047,112 @@
             } else {
                 form.style.display = 'none';
                 resetForm();
+            }
+        }
+
+        // Category Management Functions
+        async function toggleCategoryManagement() {
+            const form = document.getElementById('categoryManagement');
+            if (form.style.display === 'none' || !form.style.display) {
+                await loadCategoryManagement();
+                form.style.display = 'block';
+                form.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                form.style.display = 'none';
+            }
+        }
+
+        async function loadCategoryManagement() {
+            try {
+                const response = await fetch(`${API_BASE}/categories`);
+                const categories = await response.json();
+                const container = document.getElementById('categoryList');
+                
+                container.innerHTML = '';
+                
+                categories.forEach(category => {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'category-item';
+                    categoryDiv.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 12px; margin-bottom: 8px; background: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0;';
+                    
+                    categoryDiv.innerHTML = `
+                        <div>
+                            <strong>${category.name}</strong>
+                            <span style="color: #666; margin-left: 8px;">(${category.recipe_count} Rezepte)</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-small btn-secondary" onclick="editCategory('${category.name}')">
+                                ✏️ Umbenennen
+                            </button>
+                            <button class="btn btn-small btn-danger" onclick="deleteCategory('${category.name}', ${category.recipe_count})">
+                                🗑️ Löschen
+                            </button>
+                        </div>
+                    `;
+                    
+                    container.appendChild(categoryDiv);
+                });
+                
+            } catch (error) {
+                console.error('Error loading category management:', error);
+            }
+        }
+
+        async function editCategory(oldName) {
+            const newName = prompt(`Kategorie "${oldName}" umbenennen zu:`, oldName);
+            if (!newName || newName === oldName) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/categories/${encodeURIComponent(oldName)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Kategorie erfolgreich umbenannt! ${result.updated_recipes} Rezepte aktualisiert.`);
+                    await loadCategoryManagement();
+                    await loadCategories();
+                    await loadRecipes();
+                } else {
+                    alert('Fehler beim Umbenennen der Kategorie.');
+                }
+            } catch (error) {
+                console.error('Error renaming category:', error);
+                alert('Fehler beim Umbenennen der Kategorie.');
+            }
+        }
+
+        async function deleteCategory(categoryName, recipeCount) {
+            let action = 'clear';
+            let message = `Was möchten Sie mit der Kategorie "${categoryName}" (${recipeCount} Rezepte) tun?`;
+            
+            if (recipeCount > 0) {
+                const choice = confirm(`${message}\n\nOK = Kategorie nur entfernen (Rezepte behalten)\nAbbrechen = Aktion abbrechen\n\nWARNING: Es gibt aktuell keine Option zum Löschen der Rezepte über die UI.`);
+                if (!choice) return;
+                action = 'clear';
+            } else {
+                if (!confirm(`Leere Kategorie "${categoryName}" löschen?`)) return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/categories/${encodeURIComponent(categoryName)}?action=${action}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(result.message);
+                    await loadCategoryManagement();
+                    await loadCategories();
+                    await loadRecipes();
+                } else {
+                    alert('Fehler beim Löschen der Kategorie.');
+                }
+            } catch (error) {
+                console.error('Error deleting category:', error);
+                alert('Fehler beim Löschen der Kategorie.');
             }
         }
     </script>

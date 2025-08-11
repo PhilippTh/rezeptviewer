@@ -249,10 +249,90 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Recipe deleted successfully"}
 
-@app.get("/categories")
+# Category Management
+class CategoryCreate(BaseModel):
+    name: str
+
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
+    recipe_count: int
+
+@app.get("/categories", response_model=List[CategoryResponse])
 def get_categories(db: Session = Depends(get_db)):
+    # Get categories with recipe counts
+    result = db.query(
+        Recipe.category.label('name'),
+        func.count(Recipe.id).label('recipe_count')
+    ).filter(
+        Recipe.category.isnot(None),
+        Recipe.category != ""
+    ).group_by(Recipe.category).order_by(Recipe.category).all()
+    
+    categories = []
+    for i, (name, count) in enumerate(result, 1):
+        categories.append(CategoryResponse(id=i, name=name, recipe_count=count))
+    
+    return categories
+
+@app.get("/categories/simple")
+def get_simple_categories(db: Session = Depends(get_db)):
+    """Simple list of category names for backwards compatibility"""
     categories = db.query(Recipe.category).distinct().all()
     return [cat[0] for cat in categories if cat[0]]
+
+@app.post("/categories", response_model=dict)
+def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
+    """Create a new category by updating a recipe's category field"""
+    # Check if category already exists
+    existing = db.query(Recipe).filter(Recipe.category == category.name).first()
+    if existing:
+        return {"message": "Category already exists", "category": category.name}
+    
+    # For now, we'll just return success - categories are created when recipes use them
+    return {"message": "Category will be created when first used", "category": category.name}
+
+@app.put("/categories/{old_name}")
+def update_category(old_name: str, category: CategoryCreate, db: Session = Depends(get_db)):
+    """Rename a category across all recipes"""
+    # Update all recipes with the old category name
+    updated_count = db.query(Recipe).filter(
+        Recipe.category == old_name
+    ).update({Recipe.category: category.name})
+    
+    if updated_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    db.commit()
+    return {"message": f"Renamed category '{old_name}' to '{category.name}'", "updated_recipes": updated_count}
+
+@app.delete("/categories/{category_name}")
+def delete_category(category_name: str, action: str = Query("clear", description="Action: 'clear' or 'delete_recipes'"), db: Session = Depends(get_db)):
+    """Delete/clear a category"""
+    recipes_with_category = db.query(Recipe).filter(Recipe.category == category_name).all()
+    
+    if not recipes_with_category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    if action == "delete_recipes":
+        # Delete all recipes in this category
+        for recipe in recipes_with_category:
+            # Delete associated images
+            if recipe.image_filename:
+                file_path = UPLOAD_DIR / recipe.image_filename
+                if file_path.exists():
+                    file_path.unlink()
+            db.delete(recipe)
+        deleted_count = len(recipes_with_category)
+        db.commit()
+        return {"message": f"Deleted category '{category_name}' and {deleted_count} recipes"}
+    else:
+        # Just clear the category (set to empty)
+        updated_count = db.query(Recipe).filter(
+            Recipe.category == category_name
+        ).update({Recipe.category: ""})
+        db.commit()
+        return {"message": f"Cleared category '{category_name}' from {updated_count} recipes"}
 
 @app.get("/recipes/category/{category}", response_model=List[RecipeResponse])
 def get_recipes_by_category(category: str, db: Session = Depends(get_db)):
