@@ -1068,7 +1068,22 @@
                 const categories = await response.json();
                 const container = document.getElementById('categoryList');
                 
-                container.innerHTML = '';
+                container.innerHTML = `
+                    <div style="margin-bottom: 20px; padding: 16px; background: #e6fffa; border-radius: 8px; border: 1px solid #81e6d9;">
+                        <h4 style="margin: 0 0 12px 0; color: #2d3748;">➕ Neue Kategorie erstellen</h4>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="newCategoryName" placeholder="Kategorie-Name eingeben..." 
+                                   style="flex: 1; padding: 8px 12px; border: 2px solid #4fd1c7; border-radius: 6px;"
+                                   onkeypress="if(event.key==='Enter') createNewCategory()">
+                            <button class="btn btn-primary" onclick="createNewCategory()">
+                                ✅ Erstellen
+                            </button>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <h4 style="margin: 0; color: #2d3748;">📂 Vorhandene Kategorien</h4>
+                    </div>
+                `;
                 
                 categories.forEach(category => {
                     const categoryDiv = document.createElement('div');
@@ -1121,6 +1136,37 @@
             } catch (error) {
                 console.error('Error renaming category:', error);
                 alert('Fehler beim Umbenennen der Kategorie.');
+            }
+        }
+
+        async function createNewCategory() {
+            const nameInput = document.getElementById('newCategoryName');
+            const categoryName = nameInput.value.trim();
+            
+            if (!categoryName) {
+                alert('Bitte geben Sie einen Kategorie-Namen ein.');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/categories`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: categoryName })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Kategorie "${categoryName}" erfolgreich erstellt!`);
+                    nameInput.value = ''; // Clear input
+                    await loadCategoryManagement();
+                    await loadCategories();
+                } else {
+                    alert('Fehler beim Erstellen der Kategorie.');
+                }
+            } catch (error) {
+                console.error('Error creating category:', error);
+                alert('Fehler beim Erstellen der Kategorie.');
             }
         }
 
