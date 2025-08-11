@@ -69,15 +69,15 @@
         }
         
         .admin-buttons {
-            display: none;
+            display: none !important;
         }
         
         .admin-buttons.show {
-            display: block;
+            display: block !important;
         }
         
         .admin-buttons.show.btn {
-            display: inline-flex;
+            display: inline-flex !important;
         }
         
         .header h1 {
@@ -642,6 +642,10 @@
         let currentUser = null;
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize admin buttons as hidden
+            updateAdminButtons();
+            
+            // Then check auth status
             checkAuthStatus();
             loadRecipes();
             loadCategories();
