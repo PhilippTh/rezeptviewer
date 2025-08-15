@@ -747,9 +747,6 @@
                 <button class="btn btn-secondary" onclick="generateShoppingList()">
                     🛒 Einkaufsliste erstellen
                 </button>
-                <button class="btn btn-secondary" onclick="exportRecipes()">
-                    📤 Rezepte exportieren
-                </button>
                 <button class="btn btn-secondary" onclick="window.print()">
                     🖨️ Drucken
                 </button>
@@ -772,10 +769,13 @@
         </div>
         
         <div class="controls-section admin-buttons">
-            <h3>🏷️ Kategorien verwalten</h3>
+            <h3>⚙️ Admin-Verwaltung</h3>
             <div class="controls-row">
                 <button class="btn btn-secondary" onclick="toggleCategoryManagement()">
-                    ⚙️ Kategorien bearbeiten
+                    🏷️ Kategorien bearbeiten
+                </button>
+                <button class="btn btn-secondary" onclick="toggleExportManagement()">
+                    📤 Daten exportieren
                 </button>
             </div>
         </div>
@@ -833,6 +833,50 @@
         <div id="categoryList"></div>
         <div style="margin-top: 20px;">
             <button class="btn btn-secondary" onclick="toggleCategoryManagement()">❌ Schließen</button>
+        </div>
+    </div>
+
+    <div class="add-recipe-form" id="exportManagement" style="display: none;">
+        <h3>📤 Daten exportieren</h3>
+        <div style="display: grid; gap: 20px;">
+            <div style="padding: 20px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 12px 0; color: #2d3748; display: flex; align-items: center; gap: 8px;">
+                    📄 JSON Export (Rezepte)
+                </h4>
+                <p style="margin: 0 0 16px 0; color: #4a5568; font-size: 14px;">
+                    Exportiert alle Rezepte als JSON-Datei für Backup oder Migration.
+                </p>
+                <button class="btn btn-primary" onclick="exportRecipes()">
+                    📄 JSON Export herunterladen
+                </button>
+            </div>
+            
+            <div style="padding: 20px; background: #f0f9ff; border-radius: 8px; border: 1px solid #0ea5e9;">
+                <h4 style="margin: 0 0 12px 0; color: #0369a1; display: flex; align-items: center; gap: 8px;">
+                    🗄️ SQL Database Export
+                </h4>
+                <p style="margin: 0 0 16px 0; color: #0369a1; font-size: 14px;">
+                    Exportiert die komplette Datenbank als SQL-Dump für vollständige Backups.
+                </p>
+                <button class="btn btn-primary" onclick="exportDatabase()" style="background: #0ea5e9;">
+                    🗄️ SQL Export herunterladen
+                </button>
+            </div>
+            
+            <div style="padding: 20px; background: #fef3c7; border-radius: 8px; border: 1px solid #f59e0b;">
+                <h4 style="margin: 0 0 12px 0; color: #92400e; display: flex; align-items: center; gap: 8px;">
+                    ⚠️ Import/Export Hinweise
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; color: #92400e; font-size: 14px;">
+                    <li>JSON-Export: Nur Rezeptdaten, ideal für Backup der Inhalte</li>
+                    <li>SQL-Export: Komplette Datenbank inklusive Benutzer und Kategorien</li>
+                    <li>Speichern Sie Exporte regelmäßig als Backup</li>
+                    <li>SQL-Import erfordert Datenbankzugriff über Docker/Terminal</li>
+                </ul>
+            </div>
+        </div>
+        <div style="margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="toggleExportManagement()">❌ Schließen</button>
         </div>
     </div>
 
@@ -1400,15 +1444,74 @@
         }
 
         function exportRecipes() {
-            const dataStr = JSON.stringify(allRecipes, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            if (!currentUser || !currentUser.is_admin) {
+                alert('Admin-Zugriff erforderlich für Export-Funktionen.');
+                return;
+            }
             
-            const exportFileDefaultName = 'rezepte-export.json';
+            // Use backend endpoint for JSON export
+            window.open(`${API_BASE}/admin/export/recipes`, '_blank');
+        }
+
+        function exportDatabase() {
+            if (!currentUser || !currentUser.is_admin) {
+                alert('Admin-Zugriff erforderlich für Export-Funktionen.');
+                return;
+            }
             
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
+            if (!confirm('SQL-Export der kompletten Datenbank erstellen?\n\nDies kann einige Minuten dauern und erstellt eine vollständige Backup-Datei.')) {
+                return;
+            }
+            
+            // Show loading message
+            const originalText = event.target.textContent;
+            event.target.textContent = '⏳ Export läuft...';
+            event.target.disabled = true;
+            
+            // Use backend endpoint for SQL export
+            fetch(`${API_BASE}/admin/export/database`, {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `rezepte_database_backup_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.sql`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                alert('Datenbank-Export erfolgreich heruntergeladen!');
+            })
+            .catch(error => {
+                console.error('Export error:', error);
+                alert('Fehler beim Export der Datenbank. Bitte versuchen Sie es erneut.');
+            })
+            .finally(() => {
+                // Reset button
+                event.target.textContent = originalText;
+                event.target.disabled = false;
+            });
+        }
+
+        // Export Management Functions
+        function toggleExportManagement() {
+            const form = document.getElementById('exportManagement');
+            if (form.style.display === 'none' || !form.style.display) {
+                form.style.display = 'block';
+                form.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                form.style.display = 'none';
+            }
         }
 
         // Edit and Delete functionality

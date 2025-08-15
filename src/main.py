@@ -10,6 +10,8 @@ from datetime import date, datetime
 import os
 import uuid
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from database import get_db, Recipe, Category, User, create_tables
 
@@ -789,6 +791,128 @@ def generate_shopping_list(request: ShoppingListRequest, db: Session = Depends(g
         ingredients=merged_ingredients,
         recipe_count=len(recipes)
     )
+
+@app.get("/admin/export/database")
+async def export_database(request: Request, current_user: User = Depends(require_admin)):
+    """Export the complete database as SQL dump"""
+    try:
+        # Get database connection details from environment or default values
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_port = os.getenv("DB_PORT", "5432")
+        db_name = os.getenv("DB_NAME", "rezepte_db")
+        db_user = os.getenv("DB_USER", "rezepte_user")
+        db_password = os.getenv("DB_PASSWORD", "rezepte_password")
+        
+        # Check if we're in Docker environment
+        if os.path.exists("/.dockerenv"):
+            # We're inside Docker, use the postgres service name
+            db_host = "postgres"
+        
+        # Create temporary file for the SQL dump
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+        
+        try:
+            # Use pg_dump to create SQL export
+            cmd = [
+                "pg_dump",
+                f"--host={db_host}",
+                f"--port={db_port}",
+                f"--username={db_user}",
+                f"--dbname={db_name}",
+                "--no-password",
+                "--verbose",
+                "--clean",
+                "--create",
+                "--if-exists",
+                "--file", temp_file_path
+            ]
+            
+            # Set environment variable for password
+            env = os.environ.copy()
+            env["PGPASSWORD"] = db_password
+            
+            # Execute pg_dump
+            result = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Database export failed: {result.stderr}"
+                )
+            
+            # Generate filename with timestamp
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"rezepte_database_backup_{timestamp}.sql"
+            
+            # Return the file
+            return FileResponse(
+                path=temp_file_path,
+                filename=filename,
+                media_type="application/sql",
+                background=None  # Keep file until response is sent
+            )
+            
+        except subprocess.TimeoutExpired:
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            raise HTTPException(status_code=500, detail="Database export timeout")
+        except Exception as e:
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+            raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export database: {str(e)}")
+
+@app.get("/admin/export/recipes")
+async def export_recipes_json(request: Request, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Export all recipes as JSON"""
+    try:
+        # Get all recipes
+        recipes = db.query(Recipe).all()
+        
+        # Convert to dict format
+        recipes_data = []
+        for recipe in recipes:
+            recipe_dict = {
+                "id": recipe.id,
+                "title": recipe.title,
+                "category": recipe.category,
+                "portions": recipe.portions,
+                "ingredients": recipe.ingredients,
+                "instructions": recipe.instructions,
+                "notes": recipe.notes,
+                "created_date": recipe.created_date.isoformat() if recipe.created_date else None,
+                "image_filename": recipe.image_filename
+            }
+            recipes_data.append(recipe_dict)
+        
+        # Create temporary JSON file
+        import json
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as temp_file:
+            json.dump(recipes_data, temp_file, ensure_ascii=False, indent=2)
+            temp_file_path = temp_file.name
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"rezepte_export_{timestamp}.json"
+        
+        return FileResponse(
+            path=temp_file_path,
+            filename=filename,
+            media_type="application/json"
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export recipes: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
