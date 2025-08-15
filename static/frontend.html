@@ -482,6 +482,130 @@
             }
         }
 
+        /* Single Recipe View */
+        .single-recipe-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .single-recipe-container {
+            background: white;
+            border-radius: 16px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+            margin: auto;
+        }
+
+        .single-recipe-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            border-radius: 16px 16px 0 0;
+            padding: 24px 24px 16px 24px;
+            border-bottom: 2px solid #e2e8f0;
+            z-index: 10;
+        }
+
+        .single-recipe-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .back-button {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: #3182ce;
+            transform: translateY(-1px);
+        }
+
+        .single-recipe-content {
+            padding: 0 24px 24px 24px;
+        }
+
+        .single-recipe-title {
+            font-size: 2em;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .single-recipe-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .single-recipe-image {
+            width: 100%;
+            max-height: 300px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .recipe-card.clickable {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .recipe-card.clickable:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        .recipe-card-click-hint {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(66, 153, 225, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .recipe-card.clickable:hover .recipe-card-click-hint {
+            opacity: 1;
+        }
+
+        .recipe-card {
+            position: relative;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             body {
@@ -503,6 +627,26 @@
             
             .recipe-actions {
                 justify-content: center;
+            }
+
+            .single-recipe-overlay {
+                padding: 10px;
+            }
+
+            .single-recipe-container {
+                max-height: 95vh;
+            }
+
+            .single-recipe-header {
+                padding: 16px 16px 12px 16px;
+            }
+
+            .single-recipe-content {
+                padding: 0 16px 16px 16px;
+            }
+
+            .single-recipe-title {
+                font-size: 1.6em;
             }
         }
     </style>
@@ -656,6 +800,31 @@
 
     <div id="recipeGrid" class="recipe-grid">
         <!-- Recipes will be loaded here -->
+    </div>
+
+    <!-- Single Recipe Overlay -->
+    <div id="singleRecipeOverlay" class="single-recipe-overlay" onclick="closeSingleRecipe(event)">
+        <div class="single-recipe-container" onclick="event.stopPropagation()">
+            <div class="single-recipe-header">
+                <div class="single-recipe-nav">
+                    <button class="back-button" onclick="closeSingleRecipe()">
+                        ← Zurück zur Übersicht
+                    </button>
+                    <div id="singleRecipeActions" class="recipe-actions">
+                        <!-- Actions will be populated here -->
+                    </div>
+                </div>
+                <h1 id="singleRecipeTitle" class="single-recipe-title"></h1>
+                <div id="singleRecipeMeta" class="single-recipe-meta">
+                    <!-- Meta info will be populated here -->
+                </div>
+            </div>
+            <div class="single-recipe-content">
+                <div id="singleRecipeContent">
+                    <!-- Recipe content will be populated here -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -926,25 +1095,26 @@
 
             recipes.forEach(recipe => {
                 const card = document.createElement('div');
-                card.className = 'recipe-card';
+                card.className = 'recipe-card clickable';
                 
                 card.innerHTML = `
+                    <div class="recipe-card-click-hint">Klicken zum Anzeigen</div>
                     <div class="recipe-header">
                         <h2 class="recipe-title">${recipe.title || 'Ohne Titel'}</h2>
                     </div>
                     
                     <div class="recipe-actions">
-                        <button class="btn btn-small btn-secondary" onclick="togglePortionCalculator(${recipe.id})">
+                        <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); togglePortionCalculator(${recipe.id})">
                             📊 Portionen
                         </button>
-                        <button class="btn btn-small btn-secondary" onclick="printRecipe(${recipe.id})">
+                        <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); printRecipe(${recipe.id})">
                             🖨️ Drucken
                         </button>
                         ${currentUser && currentUser.is_admin ? `
-                        <button class="btn btn-small btn-primary" onclick="editRecipe(${recipe.id})">
+                        <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); editRecipe(${recipe.id})">
                             ✏️ Bearbeiten
                         </button>
-                        <button class="btn btn-small btn-danger" onclick="deleteRecipe(${recipe.id})">
+                        <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteRecipe(${recipe.id})">
                             🗑️ Löschen
                         </button>
                         ` : ''}
@@ -981,17 +1151,22 @@
                     
                     <div class="portion-calculator" id="calculator-${recipe.id}" style="display: none;">
                         <div class="portion-controls">
-                            <button class="portion-btn" onclick="adjustPortion(${recipe.id}, -1)">−</button>
+                            <button class="portion-btn" onclick="event.stopPropagation(); adjustPortion(${recipe.id}, -1)">−</button>
                             <div class="portion-display">
                                 <span id="current-portions-${recipe.id}">${parseFloat(recipe.portions) || 1}</span> Portionen
                             </div>
-                            <button class="portion-btn" onclick="adjustPortion(${recipe.id}, 1)">+</button>
+                            <button class="portion-btn" onclick="event.stopPropagation(); adjustPortion(${recipe.id}, 1)">+</button>
                         </div>
                         <div style="font-size: 0.9em; color: #4a5568; margin-top: 8px;">
                             Original: ${recipe.portions} Portionen
                         </div>
                     </div>
                 `;
+                
+                // Add click event to open single recipe view
+                card.addEventListener('click', function() {
+                    openSingleRecipe(recipe.id);
+                });
                 
                 grid.appendChild(card);
             });
@@ -1454,6 +1629,167 @@
                 alert('Fehler beim Löschen der Kategorie.');
             }
         }
+
+        // Single Recipe View Functions
+        function openSingleRecipe(recipeId) {
+            const recipe = allRecipes.find(r => r.id === recipeId);
+            if (!recipe) return;
+
+            // Populate title
+            document.getElementById('singleRecipeTitle').textContent = recipe.title || 'Ohne Titel';
+
+            // Populate meta information
+            const metaDiv = document.getElementById('singleRecipeMeta');
+            metaDiv.innerHTML = '';
+            
+            if (recipe.category) {
+                const categoryMeta = document.createElement('div');
+                categoryMeta.className = 'meta-item';
+                categoryMeta.innerHTML = `📂 ${recipe.category}`;
+                metaDiv.appendChild(categoryMeta);
+            }
+            
+            if (recipe.portions) {
+                const portionsMeta = document.createElement('div');
+                portionsMeta.className = 'meta-item';
+                portionsMeta.innerHTML = `👥 ${recipe.portions}`;
+                metaDiv.appendChild(portionsMeta);
+            }
+            
+            if (recipe.created_date) {
+                const dateMeta = document.createElement('div');
+                dateMeta.className = 'meta-item';
+                dateMeta.innerHTML = `📅 ${recipe.created_date}`;
+                metaDiv.appendChild(dateMeta);
+            }
+
+            // Populate actions
+            const actionsDiv = document.getElementById('singleRecipeActions');
+            actionsDiv.innerHTML = `
+                <button class="btn btn-small btn-secondary" onclick="toggleSingleRecipePortionCalculator(${recipe.id})">
+                    📊 Portionen
+                </button>
+                <button class="btn btn-small btn-secondary" onclick="printRecipe(${recipe.id})">
+                    🖨️ Drucken
+                </button>
+                ${currentUser && currentUser.is_admin ? `
+                <button class="btn btn-small btn-primary" onclick="editRecipe(${recipe.id}); closeSingleRecipe();">
+                    ✏️ Bearbeiten
+                </button>
+                <button class="btn btn-small btn-danger" onclick="deleteRecipe(${recipe.id})">
+                    🗑️ Löschen
+                </button>
+                ` : ''}
+            `;
+
+            // Populate content
+            const contentDiv = document.getElementById('singleRecipeContent');
+            contentDiv.innerHTML = '';
+
+            // Add image if exists
+            if (recipe.image_filename) {
+                const img = document.createElement('img');
+                img.src = `/uploads/${recipe.image_filename}`;
+                img.alt = recipe.title;
+                img.className = 'single-recipe-image';
+                contentDiv.appendChild(img);
+            }
+
+            // Add ingredients
+            if (recipe.ingredients) {
+                const ingredientsSection = document.createElement('div');
+                ingredientsSection.className = 'recipe-section';
+                ingredientsSection.innerHTML = `
+                    <h4>🥄 Zutaten:</h4>
+                    <p id="single-ingredients-${recipe.id}">${recipe.ingredients}</p>
+                `;
+                contentDiv.appendChild(ingredientsSection);
+            }
+
+            // Add instructions
+            if (recipe.instructions) {
+                const instructionsSection = document.createElement('div');
+                instructionsSection.className = 'recipe-section';
+                instructionsSection.innerHTML = `
+                    <h4>👨‍🍳 Anweisungen:</h4>
+                    <p>${recipe.instructions}</p>
+                `;
+                contentDiv.appendChild(instructionsSection);
+            }
+
+            // Add notes
+            if (recipe.notes) {
+                const notesSection = document.createElement('div');
+                notesSection.className = 'recipe-section';
+                notesSection.innerHTML = `
+                    <h4>💡 Hinweise:</h4>
+                    <p>${recipe.notes}</p>
+                `;
+                contentDiv.appendChild(notesSection);
+            }
+
+            // Add portion calculator
+            const calculatorDiv = document.createElement('div');
+            calculatorDiv.className = 'portion-calculator';
+            calculatorDiv.id = `single-calculator-${recipe.id}`;
+            calculatorDiv.style.display = 'none';
+            calculatorDiv.innerHTML = `
+                <div class="portion-controls">
+                    <button class="portion-btn" onclick="adjustSingleRecipePortion(${recipe.id}, -1)">−</button>
+                    <div class="portion-display">
+                        <span id="single-current-portions-${recipe.id}">${parseFloat(recipe.portions) || 1}</span> Portionen
+                    </div>
+                    <button class="portion-btn" onclick="adjustSingleRecipePortion(${recipe.id}, 1)">+</button>
+                </div>
+                <div style="font-size: 0.9em; color: #4a5568; margin-top: 8px;">
+                    Original: ${recipe.portions} Portionen
+                </div>
+            `;
+            contentDiv.appendChild(calculatorDiv);
+
+            // Show overlay
+            document.getElementById('singleRecipeOverlay').style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }
+
+        function closeSingleRecipe(event) {
+            // Only close if clicking on overlay background, not the container
+            if (event && event.target !== document.getElementById('singleRecipeOverlay')) {
+                return;
+            }
+            
+            document.getElementById('singleRecipeOverlay').style.display = 'none';
+            document.body.style.overflow = 'auto'; // Re-enable background scrolling
+        }
+
+        function toggleSingleRecipePortionCalculator(recipeId) {
+            const calculator = document.getElementById(`single-calculator-${recipeId}`);
+            calculator.style.display = calculator.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function adjustSingleRecipePortion(recipeId, change) {
+            const recipe = allRecipes.find(r => r.id === recipeId);
+            const currentElement = document.getElementById(`single-current-portions-${recipeId}`);
+            const ingredientsElement = document.getElementById(`single-ingredients-${recipeId}`);
+            
+            let currentPortions = parseFloat(currentElement.textContent);
+            let newPortions = Math.max(0.5, currentPortions + (change * 0.5));
+            
+            currentElement.textContent = newPortions;
+            
+            const originalPortions = parseFloat(recipe.portions) || 1;
+            const scaleFactor = newPortions / originalPortions;
+            
+            const scaledIngredients = scaleIngredients(recipe.ingredients, scaleFactor);
+            ingredientsElement.innerHTML = scaledIngredients;
+        }
+
+        // Add keyboard event listener for ESC key to close single recipe view
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeSingleRecipe();
+            }
+        });
     </script>
 </body>
 </html>
