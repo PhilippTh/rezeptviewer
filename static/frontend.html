@@ -942,10 +942,93 @@
         let allRecipes = [];
         let currentSort = 'title';
         let currentUser = null;
+        
+        // Portion calculator state management
+        let portionStates = {}; // Store portion multipliers for each recipe
+        
+        // Load portion states from localStorage on page load
+        function loadPortionStates() {
+            try {
+                const saved = localStorage.getItem('rezeptviewer_portions');
+                if (saved) {
+                    portionStates = JSON.parse(saved);
+                }
+            } catch (error) {
+                console.error('Error loading portion states:', error);
+                portionStates = {};
+            }
+        }
+        
+        // Save portion states to localStorage
+        function savePortionStates() {
+            try {
+                localStorage.setItem('rezeptviewer_portions', JSON.stringify(portionStates));
+            } catch (error) {
+                console.error('Error saving portion states:', error);
+            }
+        }
+        
+        // Get current portion multiplier for a recipe
+        function getPortionMultiplier(recipeId) {
+            return portionStates[recipeId] || 1.0;
+        }
+        
+        // Set portion multiplier for a recipe
+        function setPortionMultiplier(recipeId, multiplier) {
+            portionStates[recipeId] = multiplier;
+            savePortionStates();
+        }
+        
+        // Get current portions for display (considering saved multiplier)
+        function getCurrentPortions(recipeId, originalPortions) {
+            const multiplier = getPortionMultiplier(recipeId);
+            const original = parseFloat(originalPortions) || 1;
+            const current = (original * multiplier).toFixed(1).replace(/\.0$/, '');
+            return current;
+        }
+        
+        // Reset portion to original
+        function resetPortion(recipeId) {
+            const recipe = allRecipes.find(r => r.id === recipeId);
+            if (!recipe) return;
+            
+            // Reset multiplier
+            setPortionMultiplier(recipeId, 1.0);
+            
+            const originalPortions = parseFloat(recipe.portions) || 1;
+            
+            // Update card view
+            const currentElement = document.getElementById(`current-portions-${recipeId}`);
+            const ingredientsElement = document.getElementById(`ingredients-${recipeId}`);
+            if (currentElement && ingredientsElement) {
+                currentElement.textContent = originalPortions;
+                ingredientsElement.innerHTML = recipe.ingredients;
+            }
+            
+            // Update single recipe view if open
+            const singleCurrentElement = document.getElementById(`single-current-portions-${recipeId}`);
+            const singleIngredientsElement = document.getElementById(`single-ingredients-${recipeId}`);
+            if (singleCurrentElement && singleIngredientsElement) {
+                singleCurrentElement.textContent = originalPortions;
+                singleIngredientsElement.innerHTML = recipe.ingredients;
+            }
+        }
+        
+        // Get ingredients scaled according to saved multiplier
+        function getScaledIngredients(recipeId, originalIngredients) {
+            const multiplier = getPortionMultiplier(recipeId);
+            if (multiplier === 1.0) {
+                return originalIngredients;
+            }
+            return scaleIngredients(originalIngredients, multiplier);
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize admin buttons as hidden
             updateAdminButtons();
+            
+            // Load portion states from localStorage
+            loadPortionStates();
             
             // Then check auth status
             checkAuthStatus();
@@ -1242,7 +1325,7 @@
                         ${recipe.ingredients ? `
                             <div class="recipe-section">
                                 <h4>🥄 Zutaten:</h4>
-                                <p id="ingredients-${recipe.id}">${recipe.ingredients}</p>
+                                <p id="ingredients-${recipe.id}">${getScaledIngredients(recipe.id, recipe.ingredients)}</p>
                             </div>
                         ` : ''}
                         ${recipe.instructions ? `
@@ -1263,12 +1346,13 @@
                         <div class="portion-controls">
                             <button class="portion-btn" onclick="event.stopPropagation(); adjustPortion(${recipe.id}, -1)">−</button>
                             <div class="portion-display">
-                                <span id="current-portions-${recipe.id}">${parseFloat(recipe.portions) || 1}</span> Portionen
+                                <span id="current-portions-${recipe.id}">${getCurrentPortions(recipe.id, recipe.portions)}</span> Portionen
                             </div>
                             <button class="portion-btn" onclick="event.stopPropagation(); adjustPortion(${recipe.id}, 1)">+</button>
                         </div>
                         <div style="font-size: 0.9em; color: #4a5568; margin-top: 8px;">
                             Original: ${recipe.portions} Portionen
+                            <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); resetPortion(${recipe.id})" style="margin-left: 8px; padding: 2px 6px; font-size: 0.8em;">↺ Reset</button>
                         </div>
                     </div>
                 `;
@@ -1300,17 +1384,45 @@
             const originalPortions = parseFloat(recipe.portions) || 1;
             const scaleFactor = newPortions / originalPortions;
             
+            // Save the multiplier to persistent storage
+            setPortionMultiplier(recipeId, scaleFactor);
+            
             const scaledIngredients = scaleIngredients(recipe.ingredients, scaleFactor);
             ingredientsElement.innerHTML = scaledIngredients;
+            
+            // Update single recipe view if it's open for the same recipe
+            const singleIngredientsElement = document.getElementById(`single-ingredients-${recipeId}`);
+            const singleCurrentElement = document.getElementById(`single-current-portions-${recipeId}`);
+            if (singleIngredientsElement && singleCurrentElement) {
+                singleCurrentElement.textContent = newPortions;
+                singleIngredientsElement.innerHTML = scaledIngredients;
+            }
         }
 
         function scaleIngredients(ingredients, factor) {
             if (!ingredients) return '';
             
-            return ingredients.replace(/(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l|TL|EL|Prise|Stück|Stk\.?|Zehe|Zehen|dag)\b/gi, (match, amount, unit) => {
+            // Enhanced scaling with better pattern matching
+            return ingredients.replace(/(\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?)\s*(g|kg|ml|l|TL|EL|Prise|Stück|Stk\.?|Zehe|Zehen|dag|Liter|lt\.?|Teelöffel|Esslöffel|Messerspitze|MS|Bund|Packung|Dose|Glas|Becher|cl|dl)\b/gi, (match, amount, unit) => {
+                // Handle ranges (e.g., "2-3 Stück" or "1,5 - 2 kg")
+                if (amount.includes('-') || amount.includes('–')) {
+                    const rangeParts = amount.split(/\s*[-–]\s*/);
+                    const scaledRange = rangeParts.map(part => {
+                        const normalizedAmount = part.replace(',', '.');
+                        return (parseFloat(normalizedAmount) * factor).toFixed(1).replace(/\.0$/, '');
+                    }).join(' - ');
+                    return `${scaledRange} ${unit}`;
+                } else {
+                    // Handle single amounts
+                    const normalizedAmount = amount.replace(',', '.');
+                    const scaledAmount = (parseFloat(normalizedAmount) * factor).toFixed(1).replace(/\.0$/, '');
+                    return `${scaledAmount} ${unit}`;
+                }
+            }).replace(/(\d+(?:[.,]\d+)?)\s*(Vanilleschoten?|Zitronen?|Orangen?|Äpfel|Zwiebeln?|Knoblauchzehen?|Eier?|Dotter|Eigelb|Eiweiß|Eiklar)/gi, (match, amount, item) => {
+                // Handle countable items without explicit units
                 const normalizedAmount = amount.replace(',', '.');
-                const scaledAmount = (parseFloat(normalizedAmount) * factor).toFixed(1).replace(/\.0$/, '');
-                return `${scaledAmount} ${unit}`;
+                const scaledAmount = Math.max(1, Math.round(parseFloat(normalizedAmount) * factor));
+                return `${scaledAmount} ${item}`;
             });
         }
 
@@ -1870,7 +1982,7 @@
                 ingredientsSection.className = 'single-recipe-section';
                 ingredientsSection.innerHTML = `
                     <h4>🥄 Zutaten</h4>
-                    <p id="single-ingredients-${recipe.id}">${recipe.ingredients}</p>
+                    <p id="single-ingredients-${recipe.id}">${getScaledIngredients(recipe.id, recipe.ingredients)}</p>
                 `;
                 contentDiv.appendChild(ingredientsSection);
             }
@@ -1907,12 +2019,13 @@
                 <div class="portion-controls">
                     <button class="portion-btn" onclick="adjustSingleRecipePortion(${recipe.id}, -1)">−</button>
                     <div class="portion-display">
-                        <span id="single-current-portions-${recipe.id}">${parseFloat(recipe.portions) || 1}</span> Portionen
+                        <span id="single-current-portions-${recipe.id}">${getCurrentPortions(recipe.id, recipe.portions)}</span> Portionen
                     </div>
                     <button class="portion-btn" onclick="adjustSingleRecipePortion(${recipe.id}, 1)">+</button>
                 </div>
                 <div style="font-size: 0.9em; color: #0369a1; margin-top: 12px; font-weight: 500;">
                     Original: ${recipe.portions} Portionen
+                    <button class="btn btn-small btn-secondary" onclick="resetPortion(${recipe.id})" style="margin-left: 8px; padding: 2px 6px; font-size: 0.8em;">↺ Reset</button>
                 </div>
             `;
             contentDiv.appendChild(calculatorDiv);
@@ -1950,8 +2063,19 @@
             const originalPortions = parseFloat(recipe.portions) || 1;
             const scaleFactor = newPortions / originalPortions;
             
+            // Save the multiplier to persistent storage
+            setPortionMultiplier(recipeId, scaleFactor);
+            
             const scaledIngredients = scaleIngredients(recipe.ingredients, scaleFactor);
             ingredientsElement.innerHTML = scaledIngredients;
+            
+            // Update card view if it exists
+            const cardIngredientsElement = document.getElementById(`ingredients-${recipeId}`);
+            const cardCurrentElement = document.getElementById(`current-portions-${recipeId}`);
+            if (cardIngredientsElement && cardCurrentElement) {
+                cardCurrentElement.textContent = newPortions;
+                cardIngredientsElement.innerHTML = scaledIngredients;
+            }
         }
 
         // Add keyboard event listener for ESC key to close single recipe view
