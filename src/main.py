@@ -793,84 +793,145 @@ def generate_shopping_list(request: ShoppingListRequest, db: Session = Depends(g
     )
 
 @app.get("/admin/export/database")
-async def export_database(request: Request, current_user: User = Depends(require_admin)):
+async def export_database(request: Request, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Export the complete database as SQL dump"""
     try:
-        # Get database connection details from environment or default values
-        db_host = os.getenv("DB_HOST", "localhost")
+        # First, try to use pg_dump if available
+        try:
+            return await _export_with_pg_dump()
+        except Exception as pg_dump_error:
+            # Fallback to SQLAlchemy-based export
+            print(f"pg_dump failed, using fallback method: {pg_dump_error}")
+            return await _export_with_sqlalchemy(db)
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export database: {str(e)}")
+
+async def _export_with_pg_dump():
+    """Try to export using pg_dump"""
+    # Get database URL from environment
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        # Build from individual components
+        db_host = os.getenv("DB_HOST", "postgres" if os.path.exists("/.dockerenv") else "localhost")
         db_port = os.getenv("DB_PORT", "5432")
         db_name = os.getenv("DB_NAME", "rezepte_db")
         db_user = os.getenv("DB_USER", "rezepte_user")
         db_password = os.getenv("DB_PASSWORD", "rezepte_password")
+        database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    
+    # Check if pg_dump is available
+    try:
+        subprocess.run(["pg_dump", "--version"], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        raise Exception("pg_dump not available")
+    
+    # Create temporary file for the SQL dump
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as temp_file:
+        temp_file_path = temp_file.name
+    
+    try:
+        # Use pg_dump with connection string
+        cmd = [
+            "pg_dump",
+            database_url,
+            "--no-password",
+            "--verbose",
+            "--clean",
+            "--create",
+            "--if-exists",
+            "--file", temp_file_path
+        ]
         
-        # Check if we're in Docker environment
-        if os.path.exists("/.dockerenv"):
-            # We're inside Docker, use the postgres service name
-            db_host = "postgres"
+        # Execute pg_dump
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
         
-        # Create temporary file for the SQL dump
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as temp_file:
+        if result.returncode != 0:
+            raise Exception(f"pg_dump failed: {result.stderr}")
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"rezepte_database_backup_{timestamp}.sql"
+        
+        # Return the file
+        return FileResponse(
+            path=temp_file_path,
+            filename=filename,
+            media_type="application/sql"
+        )
+        
+    except Exception as e:
+        if os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
+        raise e
+
+async def _export_with_sqlalchemy(db: Session):
+    """Fallback export using SQLAlchemy"""
+    try:
+        # Generate SQL statements for all data
+        sql_lines = []
+        
+        # Add header
+        sql_lines.append("-- Recipe Database Export")
+        sql_lines.append(f"-- Generated: {datetime.now().isoformat()}")
+        sql_lines.append("-- Exported using SQLAlchemy fallback method")
+        sql_lines.append("")
+        
+        # Export Users table
+        sql_lines.append("-- Users")
+        users = db.query(User).all()
+        for user in users:
+            sql_lines.append(f"INSERT INTO users (username, password_hash, is_admin) VALUES ('{user.username}', '{user.password_hash}', {user.is_admin});")
+        sql_lines.append("")
+        
+        # Export Categories table
+        sql_lines.append("-- Categories")
+        categories = db.query(Category).all()
+        for category in categories:
+            sql_lines.append(f"INSERT INTO categories (name) VALUES ('{category.name.replace(\"'\", \"''\")}');")
+        sql_lines.append("")
+        
+        # Export Recipes table
+        sql_lines.append("-- Recipes")
+        recipes = db.query(Recipe).all()
+        for recipe in recipes:
+            title = recipe.title.replace("'", "''") if recipe.title else ''
+            category = recipe.category.replace("'", "''") if recipe.category else ''
+            portions = recipe.portions.replace("'", "''") if recipe.portions else ''
+            ingredients = recipe.ingredients.replace("'", "''") if recipe.ingredients else ''
+            instructions = recipe.instructions.replace("'", "''") if recipe.instructions else ''
+            notes = recipe.notes.replace("'", "''") if recipe.notes else ''
+            image_filename = recipe.image_filename if recipe.image_filename else 'NULL'
+            created_date = f"'{recipe.created_date}'" if recipe.created_date else 'NULL'
+            
+            sql_lines.append(
+                f"INSERT INTO recipes (title, category, portions, ingredients, instructions, notes, image_filename, created_date) "
+                f"VALUES ('{title}', '{category}', '{portions}', '{ingredients}', '{instructions}', '{notes}', "
+                f"{'NULL' if image_filename == 'NULL' else \"'\" + image_filename + \"'\"}, {created_date});"
+            )
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False, encoding='utf-8') as temp_file:
+            temp_file.write('\n'.join(sql_lines))
             temp_file_path = temp_file.name
         
-        try:
-            # Use pg_dump to create SQL export
-            cmd = [
-                "pg_dump",
-                f"--host={db_host}",
-                f"--port={db_port}",
-                f"--username={db_user}",
-                f"--dbname={db_name}",
-                "--no-password",
-                "--verbose",
-                "--clean",
-                "--create",
-                "--if-exists",
-                "--file", temp_file_path
-            ]
-            
-            # Set environment variable for password
-            env = os.environ.copy()
-            env["PGPASSWORD"] = db_password
-            
-            # Execute pg_dump
-            result = subprocess.run(
-                cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
-            
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"Database export failed: {result.stderr}"
-                )
-            
-            # Generate filename with timestamp
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"rezepte_database_backup_{timestamp}.sql"
-            
-            # Return the file
-            return FileResponse(
-                path=temp_file_path,
-                filename=filename,
-                media_type="application/sql",
-                background=None  # Keep file until response is sent
-            )
-            
-        except subprocess.TimeoutExpired:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            raise HTTPException(status_code=500, detail="Database export timeout")
-        except Exception as e:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            raise HTTPException(status_code=500, detail=f"Export error: {str(e)}")
-            
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"rezepte_database_fallback_{timestamp}.sql"
+        
+        return FileResponse(
+            path=temp_file_path,
+            filename=filename,
+            media_type="application/sql"
+        )
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to export database: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fallback export failed: {str(e)}")
 
 @app.get("/admin/export/recipes")
 async def export_recipes_json(request: Request, current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
