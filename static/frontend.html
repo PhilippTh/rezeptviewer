@@ -515,8 +515,9 @@
             top: 0;
             background: white;
             border-radius: 16px 16px 0 0;
-            padding: 24px 24px 16px 24px;
-            border-bottom: 2px solid #e2e8f0;
+            padding: 24px 24px 24px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             z-index: 10;
         }
 
@@ -524,7 +525,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }
 
         .back-button {
@@ -548,22 +549,56 @@
         }
 
         .single-recipe-content {
-            padding: 0 24px 24px 24px;
+            padding: 32px 24px 24px 24px;
         }
 
         .single-recipe-title {
-            font-size: 2em;
+            font-size: 2.2em;
             font-weight: 700;
             color: #1a202c;
-            margin: 0;
+            margin: 0 0 20px 0;
             line-height: 1.2;
         }
 
         .single-recipe-meta {
             display: flex;
             flex-wrap: wrap;
-            gap: 16px;
-            margin: 16px 0;
+            gap: 12px;
+            margin: 0 0 32px 0;
+            padding: 16px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .single-recipe-section {
+            margin-bottom: 32px;
+            padding: 24px;
+            background: #fafbfc;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .single-recipe-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .single-recipe-section h4 {
+            margin: 0 0 16px 0;
+            color: #2d3748;
+            font-size: 1.2em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .single-recipe-section p {
+            margin: 0;
+            color: #4a5568;
+            white-space: pre-wrap;
+            line-height: 1.8;
+            font-size: 1em;
         }
 
         .single-recipe-image {
@@ -571,7 +606,23 @@
             max-height: 300px;
             object-fit: cover;
             border-radius: 12px;
-            margin-bottom: 24px;
+            margin-bottom: 32px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .single-recipe-portion-calculator {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 24px;
+        }
+
+        .single-recipe-portion-calculator h5 {
+            margin: 0 0 12px 0;
+            color: #0369a1;
+            font-size: 1em;
+            font-weight: 600;
         }
 
         .recipe-card.clickable {
@@ -638,15 +689,30 @@
             }
 
             .single-recipe-header {
-                padding: 16px 16px 12px 16px;
+                padding: 16px 16px 16px 16px;
             }
 
             .single-recipe-content {
-                padding: 0 16px 16px 16px;
+                padding: 20px 16px 16px 16px;
             }
 
             .single-recipe-title {
-                font-size: 1.6em;
+                font-size: 1.8em;
+                margin-bottom: 16px;
+            }
+
+            .single-recipe-section {
+                padding: 20px;
+                margin-bottom: 24px;
+            }
+
+            .single-recipe-section h4 {
+                font-size: 1.1em;
+            }
+
+            .single-recipe-meta {
+                margin-bottom: 24px;
+                padding: 12px 0;
             }
         }
     </style>
@@ -1698,9 +1764,9 @@
             // Add ingredients
             if (recipe.ingredients) {
                 const ingredientsSection = document.createElement('div');
-                ingredientsSection.className = 'recipe-section';
+                ingredientsSection.className = 'single-recipe-section';
                 ingredientsSection.innerHTML = `
-                    <h4>🥄 Zutaten:</h4>
+                    <h4>🥄 Zutaten</h4>
                     <p id="single-ingredients-${recipe.id}">${recipe.ingredients}</p>
                 `;
                 contentDiv.appendChild(ingredientsSection);
@@ -1709,9 +1775,9 @@
             // Add instructions
             if (recipe.instructions) {
                 const instructionsSection = document.createElement('div');
-                instructionsSection.className = 'recipe-section';
+                instructionsSection.className = 'single-recipe-section';
                 instructionsSection.innerHTML = `
-                    <h4>👨‍🍳 Anweisungen:</h4>
+                    <h4>👨‍🍳 Zubereitung</h4>
                     <p>${recipe.instructions}</p>
                 `;
                 contentDiv.appendChild(instructionsSection);
@@ -1720,9 +1786,9 @@
             // Add notes
             if (recipe.notes) {
                 const notesSection = document.createElement('div');
-                notesSection.className = 'recipe-section';
+                notesSection.className = 'single-recipe-section';
                 notesSection.innerHTML = `
-                    <h4>💡 Hinweise:</h4>
+                    <h4>💡 Hinweise & Tipps</h4>
                     <p>${recipe.notes}</p>
                 `;
                 contentDiv.appendChild(notesSection);
@@ -1730,10 +1796,11 @@
 
             // Add portion calculator
             const calculatorDiv = document.createElement('div');
-            calculatorDiv.className = 'portion-calculator';
+            calculatorDiv.className = 'single-recipe-portion-calculator';
             calculatorDiv.id = `single-calculator-${recipe.id}`;
             calculatorDiv.style.display = 'none';
             calculatorDiv.innerHTML = `
+                <h5>📊 Portionen anpassen</h5>
                 <div class="portion-controls">
                     <button class="portion-btn" onclick="adjustSingleRecipePortion(${recipe.id}, -1)">−</button>
                     <div class="portion-display">
@@ -1741,7 +1808,7 @@
                     </div>
                     <button class="portion-btn" onclick="adjustSingleRecipePortion(${recipe.id}, 1)">+</button>
                 </div>
-                <div style="font-size: 0.9em; color: #4a5568; margin-top: 8px;">
+                <div style="font-size: 0.9em; color: #0369a1; margin-top: 12px; font-weight: 500;">
                     Original: ${recipe.portions} Portionen
                 </div>
             `;
