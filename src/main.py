@@ -893,7 +893,8 @@ async def _export_with_sqlalchemy(db: Session):
         sql_lines.append("-- Categories")
         categories = db.query(Category).all()
         for category in categories:
-            sql_lines.append(f"INSERT INTO categories (name) VALUES ('{category.name.replace(\"'\", \"''\")}');")
+            safe_name = category.name.replace("'", "''")
+            sql_lines.append(f"INSERT INTO categories (name) VALUES ('{safe_name}');")
         sql_lines.append("")
         
         # Export Recipes table
@@ -906,13 +907,23 @@ async def _export_with_sqlalchemy(db: Session):
             ingredients = recipe.ingredients.replace("'", "''") if recipe.ingredients else ''
             instructions = recipe.instructions.replace("'", "''") if recipe.instructions else ''
             notes = recipe.notes.replace("'", "''") if recipe.notes else ''
-            image_filename = recipe.image_filename if recipe.image_filename else 'NULL'
-            created_date = f"'{recipe.created_date}'" if recipe.created_date else 'NULL'
+            
+            # Handle image filename
+            if recipe.image_filename:
+                image_part = f"'{recipe.image_filename}'"
+            else:
+                image_part = 'NULL'
+                
+            # Handle created date
+            if recipe.created_date:
+                date_part = f"'{recipe.created_date}'"
+            else:
+                date_part = 'NULL'
             
             sql_lines.append(
                 f"INSERT INTO recipes (title, category, portions, ingredients, instructions, notes, image_filename, created_date) "
                 f"VALUES ('{title}', '{category}', '{portions}', '{ingredients}', '{instructions}', '{notes}', "
-                f"{'NULL' if image_filename == 'NULL' else \"'\" + image_filename + \"'\"}, {created_date});"
+                f"{image_part}, {date_part});"
             )
         
         # Create temporary file
