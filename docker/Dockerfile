@@ -13,21 +13,20 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy application code and templates first
+COPY app/ ./app/
+COPY templates/ ./templates/
+COPY static/ ./static/
+
 # Copy pyproject.toml and install Python dependencies
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
-# Copy application code
-COPY src/main.py .
-COPY src/database.py .
-
-# Create static directory and copy frontend
-RUN mkdir -p /app/static /app/uploads
-COPY static/frontend.html ./static/
-COPY static/logo.png ./static/
+# Create uploads directory
+RUN mkdir -p /app/uploads
 
 # Expose port
 EXPOSE 8000
 
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

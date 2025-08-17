@@ -2,18 +2,19 @@ from fastapi import FastAPI, Depends, HTTPException, Query, File, UploadFile, Fo
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from typing import List, Optional
 from datetime import date, datetime
-from schema import *
+from .schema import *
 import os
 import uuid
 import re
 import subprocess
 import tempfile
 from pathlib import Path
-from database import get_db, Recipe, Category, User, create_tables
+from .database import get_db, Recipe, Category, User, create_tables
 
 app = FastAPI(title="Recipe Viewer", description="Web app for viewing and managing recipes")
 
@@ -29,6 +30,9 @@ app.add_middleware(
 # Create uploads directory
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Setup Jinja2 templates
+templates = Jinja2Templates(directory="templates")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -57,8 +61,8 @@ async def startup_event():
     create_tables()
 
 @app.get("/")
-def read_root():
-    return RedirectResponse(url="/static/frontend.html")
+def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 # Authentication endpoints
 @app.post("/auth/login")
