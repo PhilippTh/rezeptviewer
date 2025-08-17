@@ -13,9 +13,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
-COPY requirements-migrate.txt .
-RUN pip install --no-cache-dir -r requirements-migrate.txt
+# Copy pyproject.toml and install dependencies with migration group
+COPY pyproject.toml .
+RUN pip install --no-cache-dir ".[migrate]"
 
 # Copy migration scripts
 COPY src/migrate_robust.py .

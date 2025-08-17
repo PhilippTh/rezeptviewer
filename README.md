@@ -65,8 +65,7 @@ rezeptviewer/
 ├── static/
 │   └── frontend.html       # Web Interface
 ├── docker-compose.yml      # Multi-Container Setup
-├── requirements.txt        # Produktions-Dependencies
-├── requirements-migrate.txt # Migration-Dependencies
+├── pyproject.toml         # Python Dependencies & Build Configuration
 └── Rezepte.dbf            # Deine DBF-Datei
 ```
 
@@ -74,7 +73,7 @@ rezeptviewer/
 
 ```bash
 # Dependencies installieren
-pip install -r requirements.txt
+pip install .
 
 # Umgebungsvariable setzen
 export DATABASE_URL="postgresql://rezepte_user:rezepte_password@localhost:5432/rezepte_db"
