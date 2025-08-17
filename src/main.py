@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from typing import List, Optional
-from pydantic import BaseModel
 from datetime import date, datetime
+from schema import *
 import os
 import uuid
 import re
@@ -55,38 +55,6 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
 @app.on_event("startup")
 async def startup_event():
     create_tables()
-
-# Authentication models
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class UserInfo(BaseModel):
-    username: str
-    is_admin: bool
-
-class PasswordChangeRequest(BaseModel):
-    current_password: str
-    new_password: str
-
-class RecipeBase(BaseModel):
-    title: str
-    category: Optional[str] = None
-    portions: Optional[str] = None
-    ingredients: str
-    instructions: Optional[str] = None
-    notes: Optional[str] = None
-    image_filename: Optional[str] = None
-
-class RecipeCreate(RecipeBase):
-    pass
-
-class RecipeResponse(RecipeBase):
-    id: int
-    created_date: date = None
-    
-    class Config:
-        from_attributes = True
 
 @app.get("/")
 def read_root():
@@ -342,15 +310,6 @@ def delete_recipe(recipe_id: int, request: Request, db: Session = Depends(get_db
     db.commit()
     return {"message": "Recipe deleted successfully"}
 
-# Category Management
-class CategoryCreate(BaseModel):
-    name: str
-
-class CategoryResponse(BaseModel):
-    id: int
-    name: str
-    recipe_count: int
-
 @app.get("/categories", response_model=List[CategoryResponse])
 def get_categories(db: Session = Depends(get_db)):
     # Get all categories from Category table and recipe categories with counts
@@ -533,28 +492,6 @@ def search_recipes(q: str = Query(..., description="Search term"), db: Session =
         )
         recipes.append(recipe)
     return recipes
-
-class PortionScale(BaseModel):
-    original_portions: str
-    target_portions: int
-    
-class ScaledRecipeResponse(RecipeResponse):
-    scaled_ingredients: str
-    scaling_factor: float
-
-class ShoppingListRequest(BaseModel):
-    recipe_ids: List[int]
-    portions_override: Optional[dict] = {}  # Optional dict of recipe_id -> desired_portions
-
-class IngredientItem(BaseModel):
-    name: str
-    amount: Optional[float] = None
-    unit: Optional[str] = None
-    recipes: List[str]  # List of recipe titles that contain this ingredient
-
-class ShoppingListResponse(BaseModel):
-    ingredients: List[IngredientItem]
-    recipe_count: int
 
 @app.post("/recipes/{recipe_id}/scale", response_model=ScaledRecipeResponse)
 def scale_recipe_portions(recipe_id: int, scale_request: PortionScale, db: Session = Depends(get_db)):
