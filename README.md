@@ -103,7 +103,7 @@ python src/main.py
 
 ## ✨ Features
 
-- ✅ Einmalige DBF-Migration (122 Rezepte von Papa)
+- ✅ Einmalige DBF-Migration
 - ✅ PostgreSQL Datenbank mit Docker
 - ✅ FastAPI REST API (unterstützt bis zu 1000 Rezepte)
 - ✅ Responsive Web-Interface mit Waldschenke-Logo
